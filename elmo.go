@@ -48,10 +48,10 @@ func getSrc(t html.Token) (ok bool, src string) {
 }
 
 // Extract all http** links from a given webpage
-func fetch_main_url(url string) (map[string]bool, download_statistic) {
+func fetch_main_url(url string) ([]string, download_statistic) {
 
 	//List of urls found
-	foundUrls := make(map[string]bool)
+	var assets []string
 
 	//set download_statistic
 	stat := download_statistic{url, 0, 0}
@@ -64,7 +64,7 @@ func fetch_main_url(url string) (map[string]bool, download_statistic) {
 
 	if err != nil {
 		fmt.Println("ERROR: Failed to get input url \"" + url + "\"")
-		return foundUrls, stat
+		return assets, stat
 	}
 
 	//timer after
@@ -78,7 +78,7 @@ func fetch_main_url(url string) (map[string]bool, download_statistic) {
 
 	if err != nil {
 		fmt.Println("ERROR: Failed to read body for input url \"" + url + "\"")
-		return foundUrls, stat
+		return assets, stat
 	}
 
 	//Set response size stat
@@ -97,7 +97,7 @@ func fetch_main_url(url string) (map[string]bool, download_statistic) {
 		case tt == html.ErrorToken:
 			// End of the document, we're done
 			//fmt.Printf("   - end of doc\n")
-			return foundUrls, stat
+			return assets, stat
 		case tt == html.SelfClosingTagToken:
 			t := z.Token()
 
@@ -116,7 +116,7 @@ func fetch_main_url(url string) (map[string]bool, download_statistic) {
 			// Make sure the url begines in http**
 			hasProto := strings.Index(url, "http") == 0
 			if hasProto {
-				foundUrls[url] = true
+				assets = append(assets, url)
 			}
 		}
 	}
@@ -166,7 +166,7 @@ func fetch_asset(url string, chStat chan download_statistic, chFinished chan boo
 
 func main() {
 	//urls and global stats
-	var foundUrls map[string]bool
+	var assets []string
 	var main_url_stat download_statistic
 	var gstat global_statistic
 
@@ -186,22 +186,21 @@ func main() {
 	t0 := time.Now()
 
 	//Fetch the main url and get inner links
-	foundUrls, main_url_stat = fetch_main_url(*url)
+	assets, main_url_stat = fetch_main_url(*url)
 	gstat.total_response_time += main_url_stat.response_time
 	gstat.total_response_size += main_url_stat.response_size
 
 	//Fetch inner links
-	for url, _ := range foundUrls {
+	for _, url := range assets {
 		go fetch_asset(url, chUrls, chFinished)
 	}
 
 	// Subscribe to channels to wait for go routine
-	for c := 0; c < len(foundUrls); {
+	for c := 0; c < len(assets); {
 		select {
 		case stat := <-chUrls:
 			gstat.total_response_time += stat.response_time
 			gstat.total_response_size += stat.response_size
-			foundUrls[stat.url] = true
 		case <-chFinished:
 			c++
 		}
