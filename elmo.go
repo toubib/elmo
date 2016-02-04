@@ -29,8 +29,9 @@ var (
 	BUILD_DATE = ""
 )
 
-var url = flag.String("url", "", "The url to get")
-var version = flag.Bool("version", false, "print version information")
+var url = flag.String("url", "", "The url to get.")
+var version = flag.Bool("version", false, "Print version information.")
+var parallel_fetch = flag.Int("parallel", 8, "Number of parallel fetch to launch. 0 means unlimited.")
 
 // Helper function to pull the  attribute from a Token
 func getSrc(t html.Token) (ok bool, src string) {
@@ -169,6 +170,7 @@ func main() {
 	var assets []string
 	var main_url_stat download_statistic
 	var gstat global_statistic
+	var current_url_index int
 
 	flag.Parse()
 
@@ -190,9 +192,17 @@ func main() {
 	gstat.total_response_time += main_url_stat.response_time
 	gstat.total_response_size += main_url_stat.response_size
 
-	//Fetch inner links
+	//Fetch the firsts inner links
 	for _, url := range assets {
+		//fmt.Printf("%d/%d: call %s\n",current_url_index, len(assets)-1, url)
+
 		go fetch_asset(url, chUrls, chFinished)
+
+		//limit calls count to max_concurrent_call
+		current_url_index++
+		if current_url_index == *parallel_fetch {
+			break
+		}
 	}
 
 	// Subscribe to channels to wait for go routine
@@ -201,8 +211,14 @@ func main() {
 		case stat := <-chUrls:
 			gstat.total_response_time += stat.response_time
 			gstat.total_response_size += stat.response_size
+		//got an asset, fetch next if exist
 		case <-chFinished:
+			if current_url_index < len(assets) {
+				//fmt.Printf("%d/%d: call %s\n",current_url_index, len(assets)-1, assets[current_url_index])
+				go fetch_asset(assets[current_url_index], chUrls, chFinished)
+			}
 			c++
+			current_url_index++
 		}
 	}
 
