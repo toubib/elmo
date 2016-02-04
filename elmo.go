@@ -13,15 +13,15 @@ import (
 	"time"
 )
 
-type download_statistic struct {
+type downloadStatistic struct {
 	url           string
-	response_time time.Duration
-	response_size int
+	responseTime time.Duration
+	responseSize int
 }
 
-type global_statistic struct {
-	total_response_time time.Duration
-	total_response_size int
+type globalStatistic struct {
+	totalResponseTime time.Duration
+	totalResponseSize int
 }
 
 var (
@@ -31,7 +31,7 @@ var (
 
 var url = flag.String("url", "", "The url to get.")
 var version = flag.Bool("version", false, "Print version information.")
-var parallel_fetch = flag.Int("parallel", 8, "Number of parallel fetch to launch. 0 means unlimited.")
+var parallelFetch = flag.Int("parallel", 8, "Number of parallel fetch to launch. 0 means unlimited.")
 
 // Helper function to pull the  attribute from a Token
 func getSrc(t html.Token) (ok bool, src string) {
@@ -49,13 +49,13 @@ func getSrc(t html.Token) (ok bool, src string) {
 }
 
 // Extract all http** links from a given webpage
-func fetch_main_url(url string) ([]string, download_statistic) {
+func fetchMainUrl(url string) ([]string, downloadStatistic) {
 
 	//List of urls found
 	var assets []string
 
-	//set download_statistic
-	stat := download_statistic{url, 0, 0}
+	//set downloadStatistic
+	stat := downloadStatistic{url, 0, 0}
 
 	//timer before
 	t0 := time.Now()
@@ -72,7 +72,7 @@ func fetch_main_url(url string) ([]string, download_statistic) {
 	t1 := time.Now()
 
 	//Set request time stat
-	stat.response_time = t1.Sub(t0)
+	stat.responseTime = t1.Sub(t0)
 
 	//get the body size
 	body, err := ioutil.ReadAll(resp.Body)
@@ -83,10 +83,10 @@ func fetch_main_url(url string) ([]string, download_statistic) {
 	}
 
 	//Set response size stat
-	stat.response_size = len(body)
+	stat.responseSize = len(body)
 
 	//Print download
-	fmt.Printf(" - [%s] %s %v %v\n", resp.Status, stat.url, stat.response_time, stat.response_size)
+	fmt.Printf(" - [%s] %s %v %v\n", resp.Status, stat.url, stat.responseTime, stat.responseSize)
 
 	//create the tokenizer
 	z := html.NewTokenizer(bytes.NewReader(body))
@@ -123,11 +123,11 @@ func fetch_main_url(url string) ([]string, download_statistic) {
 	}
 }
 
-//Fetch an asset and get download_statistic
-func fetch_asset(url string, chStat chan download_statistic, chFinished chan bool) {
+//Fetch an asset and get downloadStatistic
+func fetchAsset(url string, chStat chan downloadStatistic, chFinished chan bool) {
 
-	//set download_statistic
-	stat := download_statistic{url, 0, 0}
+	//set downloadStatistic
+	stat := downloadStatistic{url, 0, 0}
 
 	//timer before
 	t0 := time.Now()
@@ -144,7 +144,7 @@ func fetch_asset(url string, chStat chan download_statistic, chFinished chan boo
 	t1 := time.Now()
 
 	//Set request time stat
-	stat.response_time = t1.Sub(t0)
+	stat.responseTime = t1.Sub(t0)
 
 	defer func() {
 		// Notify that we're done after this function
@@ -157,10 +157,10 @@ func fetch_asset(url string, chStat chan download_statistic, chFinished chan boo
 	body, err := ioutil.ReadAll(resp.Body)
 
 	//Set response size stat
-	stat.response_size = len(body)
+	stat.responseSize = len(body)
 
 	//Print download
-	fmt.Printf(" - [%s] %s %v %v\n", resp.Status, stat.url, stat.response_time, stat.response_size)
+	fmt.Printf(" - [%s] %s %v %v\n", resp.Status, stat.url, stat.responseTime, stat.responseSize)
 
 	chStat <- stat
 }
@@ -168,14 +168,14 @@ func fetch_asset(url string, chStat chan download_statistic, chFinished chan boo
 func main() {
 	//urls and global stats
 	var assets []string
-	var main_url_stat download_statistic
-	var gstat global_statistic
-	var current_url_index int
+	var mainUrlStat downloadStatistic
+	var gstat globalStatistic
+	var currentUrlIndex int
 
 	flag.Parse()
 
 	// Channels
-	chUrls := make(chan download_statistic)
+	chUrls := make(chan downloadStatistic)
 	chFinished := make(chan bool)
 
 	// Manage flags stuff
@@ -188,19 +188,19 @@ func main() {
 	t0 := time.Now()
 
 	//Fetch the main url and get inner links
-	assets, main_url_stat = fetch_main_url(*url)
-	gstat.total_response_time += main_url_stat.response_time
-	gstat.total_response_size += main_url_stat.response_size
+	assets, mainUrlStat = fetchMainUrl(*url)
+	gstat.totalResponseTime += mainUrlStat.responseTime
+	gstat.totalResponseSize += mainUrlStat.responseSize
 
 	//Fetch the firsts inner links
 	for _, url := range assets {
-		//fmt.Printf("%d/%d: call %s\n",current_url_index, len(assets)-1, url)
+		//fmt.Printf("%d/%d: call %s\n",currentUrlIndex, len(assets)-1, url)
 
-		go fetch_asset(url, chUrls, chFinished)
+		go fetchAsset(url, chUrls, chFinished)
 
 		//limit calls count to max_concurrent_call
-		current_url_index++
-		if current_url_index == *parallel_fetch {
+		currentUrlIndex++
+		if currentUrlIndex == *parallelFetch {
 			break
 		}
 	}
@@ -209,16 +209,16 @@ func main() {
 	for c := 0; c < len(assets); {
 		select {
 		case stat := <-chUrls:
-			gstat.total_response_time += stat.response_time
-			gstat.total_response_size += stat.response_size
+			gstat.totalResponseTime += stat.responseTime
+			gstat.totalResponseSize += stat.responseSize
 		//got an asset, fetch next if exist
 		case <-chFinished:
-			if current_url_index < len(assets) {
-				//fmt.Printf("%d/%d: call %s\n",current_url_index, len(assets)-1, assets[current_url_index])
-				go fetch_asset(assets[current_url_index], chUrls, chFinished)
+			if currentUrlIndex < len(assets) {
+				//fmt.Printf("%d/%d: call %s\n",currentUrlIndex, len(assets)-1, assets[currentUrlIndex])
+				go fetchAsset(assets[currentUrlIndex], chUrls, chFinished)
 			}
 			c++
-			current_url_index++
+			currentUrlIndex++
 		}
 	}
 
@@ -227,8 +227,8 @@ func main() {
 
 	// We're done! Print the results...
 	fmt.Printf("The call took %v to run.\n", t1.Sub(t0))
-	fmt.Printf("Cumulated time: %v.\n", gstat.total_response_time)
-	fmt.Printf("Cumulated size: %v.\n", gstat.total_response_size)
+	fmt.Printf("Cumulated time: %v.\n", gstat.totalResponseTime)
+	fmt.Printf("Cumulated size: %v.\n", gstat.totalResponseSize)
 
 	close(chUrls)
 }
