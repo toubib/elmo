@@ -88,6 +88,17 @@ func fetchMainUrl(url string) ([]string, downloadStatistic) {
 	//Print download
 	fmt.Printf(" - [%s] %s %v %v\n", resp.Status, stat.url, stat.responseTime, stat.responseSize)
 
+	//extract assets from html
+	assets = extractAssets(body)
+
+	return assets, stat
+}
+
+
+//Get a html body and extract all assets links
+func extractAssets(body []byte) []string {
+	var assets []string
+
 	//create the tokenizer
 	z := html.NewTokenizer(bytes.NewReader(body))
 
@@ -98,7 +109,7 @@ func fetchMainUrl(url string) ([]string, downloadStatistic) {
 		case tt == html.ErrorToken:
 			// End of the document, we're done
 			//fmt.Printf("   - end of doc\n")
-			return assets, stat
+			return assets
 		case tt == html.SelfClosingTagToken:
 			t := z.Token()
 
