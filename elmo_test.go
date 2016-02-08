@@ -9,12 +9,19 @@ import (
 
 func TestFetchMainUrl(t *testing.T) {
 
+	const htmlBody = `<body>
+		<img src="http://test.com/1.png"/>
+		<img src="http://test.com/2.png"/>
+		<img src="http://test.com/3.png"/>
+	</body>`
+	const htmlBodySize = 127
+
 	tests := []struct {
 		assetCount, responseSize int
-	}{ {3, 116} }
+	}{ {3, htmlBodySize} }
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, "<body><img src=\"http://test.com/1.png\"/><img src=\"http://test.com/2.png\"/><img src=\"http://test.com/3.png\"/></body>")
+		fmt.Fprintln(w, htmlBody)
 	}))
 	defer ts.Close()
 
