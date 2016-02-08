@@ -34,11 +34,23 @@ var version = flag.Bool("version", false, "Print version information.")
 var parallelFetch = flag.Int("parallel", 8, "Number of parallel fetch to launch. 0 means unlimited.")
 
 // Helper function to pull the  attribute from a Token
-func getSrc(t html.Token) (ok bool, src string) {
+func getLink(t html.Token) (ok bool, link string) {
+
+	// Check link types, we need only stylesheet
+	if t.Data == "link" {
+		for _, a := range t.Attr {
+			if a.Key == "rel" && a.Val != "stylesheet" {
+				ok = false
+				return
+			}
+		}
+
+	}
+
 	// Iterate over all of the Token's attributes until we find an "src"
 	for _, a := range t.Attr {
-		if a.Key == "src" {
-			src = a.Val
+		if a.Key == "src" || a.Key == "href" {
+			link = a.Val
 			ok = true
 		}
 	}
@@ -105,23 +117,29 @@ func extractAssets(body []byte) []string {
 	for {
 		tt := z.Next()
 
-		switch {
-		case tt == html.ErrorToken:
+		switch tt {
+		case html.ErrorToken:
 			// End of the document, we're done
 			//fmt.Printf("   - end of doc\n")
 			return assets
-		case tt == html.SelfClosingTagToken:
+		case html.SelfClosingTagToken, html.StartTagToken:
 			t := z.Token()
 
-			// Check if the token is an <img> tag
-			isAnchor := t.Data == "img"
-			if !isAnchor {
+			// Check if the token is a target tag
+			// And extract the link if there is one
+			if t.Data != "img" &&
+				t.Data != "script" &&
+				t.Data != "embed" &&
+				t.Data != "link" && //only stylesheet
+				t.Data != "input" {
+
 				continue
 			}
 
-			// Extract the src value, if there is one
-			ok, url := getSrc(t)
-			if !ok {
+			linkFound, url := getLink(t)
+
+			// We do not found a link
+			if !linkFound {
 				continue
 			}
 

@@ -9,16 +9,19 @@ import (
 
 func TestFetchMainUrl(t *testing.T) {
 
-	const htmlBody = `<body>
+	const htmlBody = `<head>
+		<link rel="alternate" type="application/rss+xml" title="Flux" href="http://test.com/feed/" />
+		<link rel="stylesheet" href="http://test.com/1.css" type="text/css" media="all" />
+		</head><body>
 		<img src="http://test.com/1.png"/>
-		<img src="http://test.com/2.png"/>
-		<img src="http://test.com/3.png"/>
+		<img src="http://test.com/É.png"/>
+		<img src="http://test.com/3.png">
+		<script type="text/javascript" src="http://test.com/1.js">
 	</body>`
-	const htmlBodySize = 127
 
 	tests := []struct {
 		assetCount, responseSize int
-	}{ {3, htmlBodySize} }
+	}{ {5, 385} }
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, htmlBody)
