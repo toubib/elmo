@@ -281,7 +281,6 @@ func main() {
 
 	// We're done! Print the results...
 	fmt.Printf("The call took %v to run.\n", cyan(t1.Sub(t0)))
-	fmt.Printf("Cumulated time: %v.\n", gstat.totalResponseTime)
 	fmt.Printf("Cumulated size: %v%s.\n", white(gstat.totalResponseSize), white("b"))
 
 	close(chUrls)
