@@ -31,6 +31,7 @@ type downloadStatistic struct {
 	url           string
 	responseTime time.Duration
 	responseSize int
+	statusCode   int
 }
 
 type globalStatistic struct {
@@ -94,7 +95,7 @@ func fetchMainUrl(url string) ([]string, downloadStatistic) {
 	var assets []string
 
 	//set downloadStatistic
-	stat := downloadStatistic{url, 0, 0}
+	stat := downloadStatistic{url, 0, 0, 0}
 
 	//timer before
 	t0 := time.Now()
@@ -107,11 +108,9 @@ func fetchMainUrl(url string) ([]string, downloadStatistic) {
 		return assets, stat
 	}
 
-	//timer after
-	t1 := time.Now()
-
-	//Set request time stat
-	stat.responseTime = t1.Sub(t0)
+	//Set stats
+	stat.responseTime = time.Now().Sub(t0)
+	stat.statusCode = resp.StatusCode
 
 	//get the body size
 	body, err := ioutil.ReadAll(resp.Body)
@@ -126,7 +125,7 @@ func fetchMainUrl(url string) ([]string, downloadStatistic) {
 
 	//Print download
 	if (*verbose) {
-		fmt.Printf("%s\t%s %s %v %v%s\n", time.Now().Sub(globalStartTime), yellow(resp.StatusCode), stat.url, cyan(stat.responseTime), white(stat.responseSize),white("b"))
+		fmt.Printf("%s\t%s %s %v %v%s\n", time.Now().Sub(globalStartTime), yellow(stat.statusCode), stat.url, cyan(stat.responseTime), white(stat.responseSize),white("b"))
 	}
 
 	//extract assets from html
@@ -185,7 +184,7 @@ func extractAssets(body []byte) []string {
 func fetchAsset(url string, chStat chan downloadStatistic, chFinished chan bool) {
 
 	//set downloadStatistic
-	stat := downloadStatistic{url, 0, 0}
+	stat := downloadStatistic{url, 0, 0, 0}
 
 	//timer before
 	t0 := time.Now()
@@ -198,11 +197,9 @@ func fetchAsset(url string, chStat chan downloadStatistic, chFinished chan bool)
 		return
 	}
 
-	//timer after
-	t1 := time.Now()
-
-	//Set request time stat
-	stat.responseTime = t1.Sub(t0)
+	//Set stat
+	stat.responseTime = time.Now().Sub(t0)
+	stat.statusCode = resp.StatusCode
 
 	defer func() {
 		// Notify that we're done after this function
@@ -218,9 +215,8 @@ func fetchAsset(url string, chStat chan downloadStatistic, chFinished chan bool)
 	stat.responseSize = len(body)
 
 	//Print download
-
 	if (*verbose) {
-		fmt.Printf("%s\t%s %s %v %v%s\n", time.Now().Sub(globalStartTime), yellow(resp.StatusCode), stat.url, cyan(stat.responseTime), white(stat.responseSize),white("b"))
+		fmt.Printf("%s\t%s %s %v %v%s\n", time.Now().Sub(globalStartTime), yellow(stat.statusCode), stat.url, cyan(stat.responseTime), white(stat.responseSize),white("b"))
 	}
 
 	chStat <- stat
@@ -229,6 +225,7 @@ func fetchAsset(url string, chStat chan downloadStatistic, chFinished chan bool)
 func main() {
 	//urls and global stats
 	var assets []string
+	var assetsStats []downloadStatistic
 	var mainUrlStat downloadStatistic
 	var gstat globalStatistic
 	var currentUrlIndex int
@@ -250,7 +247,6 @@ func main() {
 
 	//Fetch the main url and get inner links
 	assets, mainUrlStat = fetchMainUrl(*url)
-	gstat.totalResponseTime += mainUrlStat.responseTime
 	gstat.totalResponseSize += mainUrlStat.responseSize
 
 	//Fetch the firsts inner links
@@ -270,12 +266,11 @@ func main() {
 	for c := 0; c < len(assets); {
 		select {
 		case stat := <-chUrls:
-			gstat.totalResponseTime += stat.responseTime
+			assetsStats = append(assetsStats,stat)
 			gstat.totalResponseSize += stat.responseSize
 		//got an asset, fetch next if exist
 		case <-chFinished:
 			if currentUrlIndex < len(assets) {
-				//fmt.Printf("%d/%d: call %s\n",currentUrlIndex, len(assets)-1, assets[currentUrlIndex])
 				go fetchAsset(assets[currentUrlIndex], chUrls, chFinished)
 			}
 			c++
@@ -286,10 +281,18 @@ func main() {
 	close(chUrls)
 
 	//Set timer for global time
-	t1 := time.Now()
+	gstat.totalResponseTime += time.Now().Sub(t0)
+
+	//Use that to send data to influx
+	//for _, stat := range assetsStats {
+	//	if (*verbose) {
+	//		fmt.Printf("%s\t%s %s %v %v%s\n", time.Now().Sub(globalStartTime), yellow(stat.statusCode), stat.url, cyan(stat.responseTime), white(stat.responseSize),white("b"))
+	//	}
+
+	//}
 
 	// We're done! Print the results...
-	fmt.Printf("The call took %v to run.\n", cyan(t1.Sub(t0)))
+	fmt.Printf("The call took %v to run.\n", cyan(gstat.totalResponseTime))
 	fmt.Printf("Total size: %v%s.\n", white(gstat.totalResponseSize/1024), white("kb"))
 
 }
