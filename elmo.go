@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"github.com/fatih/color"
 )
 
 type downloadStatistic struct {
@@ -42,9 +43,19 @@ var (
 	BUILD_DATE = ""
 )
 
-var url = flag.String("url", "", "The url to get.")
-var version = flag.Bool("version", false, "Print version information.")
-var parallelFetch = flag.Int("parallel", 8, "Number of parallel fetch to launch. 0 means unlimited.")
+//colors !
+var (
+	yellow = color.New(color.FgYellow).SprintFunc()
+	cyan = color.New(color.FgCyan).SprintFunc()
+	white = color.New(color.FgWhite).SprintFunc()
+)
+
+//cli flags
+var (
+	url = flag.String("url", "", "The url to get.")
+	version = flag.Bool("version", false, "Print version information.")
+	parallelFetch = flag.Int("parallel", 8, "Number of parallel fetch to launch. 0 means unlimited.")
+)
 
 // Helper function to pull the  attribute from a Token
 func getLink(t html.Token) (ok bool, link string) {
@@ -111,7 +122,7 @@ func fetchMainUrl(url string) ([]string, downloadStatistic) {
 	stat.responseSize = len(body)
 
 	//Print download
-	fmt.Printf(" - [%s] %s %v %v\n", resp.Status, stat.url, stat.responseTime, stat.responseSize)
+	fmt.Printf(" - [%s] %s %v %v%s\n", yellow(resp.StatusCode), stat.url, cyan(stat.responseTime), white(stat.responseSize),white("b"))
 
 	//extract assets from html
 	assets = extractAssets(body)
@@ -202,7 +213,8 @@ func fetchAsset(url string, chStat chan downloadStatistic, chFinished chan bool)
 	stat.responseSize = len(body)
 
 	//Print download
-	fmt.Printf(" - [%s] %s %v %v\n", resp.Status, stat.url, stat.responseTime, stat.responseSize)
+
+	fmt.Printf(" - [%s] %s %v %v%s\n", yellow(resp.StatusCode), stat.url, cyan(stat.responseTime), white(stat.responseSize),white("b"))
 
 	chStat <- stat
 }
@@ -268,9 +280,9 @@ func main() {
 	t1 := time.Now()
 
 	// We're done! Print the results...
-	fmt.Printf("The call took %v to run.\n", t1.Sub(t0))
+	fmt.Printf("The call took %v to run.\n", cyan(t1.Sub(t0)))
 	fmt.Printf("Cumulated time: %v.\n", gstat.totalResponseTime)
-	fmt.Printf("Cumulated size: %v.\n", gstat.totalResponseSize)
+	fmt.Printf("Cumulated size: %v%s.\n", white(gstat.totalResponseSize), white("b"))
 
 	close(chUrls)
 }
