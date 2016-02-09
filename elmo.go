@@ -276,6 +276,8 @@ func main() {
 		}
 	}
 
+	close(chUrls)
+
 	//Set timer for global time
 	t1 := time.Now()
 
@@ -283,5 +285,4 @@ func main() {
 	fmt.Printf("The call took %v to run.\n", cyan(t1.Sub(t0)))
 	fmt.Printf("Cumulated size: %v%s.\n", white(gstat.totalResponseSize), white("b"))
 
-	close(chUrls)
 }
