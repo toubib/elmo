@@ -54,8 +54,11 @@ var (
 var (
 	url = flag.String("url", "", "The url to get.")
 	version = flag.Bool("version", false, "Print version information.")
+	verbose = flag.Bool("verbose", false, "Print more informations.")
 	parallelFetch = flag.Int("parallel", 8, "Number of parallel fetch to launch. 0 means unlimited.")
 )
+
+var globalStartTime = time.Now()
 
 // Helper function to pull the  attribute from a Token
 func getLink(t html.Token) (ok bool, link string) {
@@ -122,7 +125,9 @@ func fetchMainUrl(url string) ([]string, downloadStatistic) {
 	stat.responseSize = len(body)
 
 	//Print download
-	fmt.Printf(" - [%s] %s %v %v%s\n", yellow(resp.StatusCode), stat.url, cyan(stat.responseTime), white(stat.responseSize),white("b"))
+	if (*verbose) {
+		fmt.Printf("%s\t%s %s %v %v%s\n", time.Now().Sub(globalStartTime), yellow(resp.StatusCode), stat.url, cyan(stat.responseTime), white(stat.responseSize),white("b"))
+	}
 
 	//extract assets from html
 	assets = extractAssets(body)
@@ -214,7 +219,9 @@ func fetchAsset(url string, chStat chan downloadStatistic, chFinished chan bool)
 
 	//Print download
 
-	fmt.Printf(" - [%s] %s %v %v%s\n", yellow(resp.StatusCode), stat.url, cyan(stat.responseTime), white(stat.responseSize),white("b"))
+	if (*verbose) {
+		fmt.Printf("%s\t%s %s %v %v%s\n", time.Now().Sub(globalStartTime), yellow(resp.StatusCode), stat.url, cyan(stat.responseTime), white(stat.responseSize),white("b"))
+	}
 
 	chStat <- stat
 }
@@ -283,6 +290,6 @@ func main() {
 
 	// We're done! Print the results...
 	fmt.Printf("The call took %v to run.\n", cyan(t1.Sub(t0)))
-	fmt.Printf("Cumulated size: %v%s.\n", white(gstat.totalResponseSize), white("b"))
+	fmt.Printf("Total size: %v%s.\n", white(gstat.totalResponseSize/1024), white("kb"))
 
 }
