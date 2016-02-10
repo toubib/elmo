@@ -1,25 +1,25 @@
 /*
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>. 1
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>. 1
 */
 
 package main
 
 import (
 	"fmt"
-	"testing"
 	"net/http"
 	"net/http/httptest"
+	"testing"
 )
 
 func TestFetchMainUrl(t *testing.T) {
@@ -36,7 +36,7 @@ func TestFetchMainUrl(t *testing.T) {
 
 	tests := []struct {
 		assetCount, responseSize int
-	}{ {5, 385} }
+	}{{5, 385}}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, htmlBody)
@@ -46,12 +46,12 @@ func TestFetchMainUrl(t *testing.T) {
 	for _, tt := range tests {
 		assets, mainUrlStat := fetchMainUrl(ts.URL)
 
-		if (len(assets) != tt.assetCount){
-			t.Errorf("fetchMainUrl do not returned %d elements but %d", tt.assetCount,len(assets))
+		if len(assets) != tt.assetCount {
+			t.Errorf("fetchMainUrl do not returned %d elements but %d", tt.assetCount, len(assets))
 		}
 
-		if (mainUrlStat.responseSize != tt.responseSize){
-			t.Errorf("mainUrlStat.responseSize is not returned %d but %d",tt.responseSize,mainUrlStat.responseSize)
+		if mainUrlStat.responseSize != tt.responseSize {
+			t.Errorf("mainUrlStat.responseSize is not returned %d but %d", tt.responseSize, mainUrlStat.responseSize)
 		}
 	}
 }
