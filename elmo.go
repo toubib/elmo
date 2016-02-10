@@ -20,7 +20,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/fatih/color"
-	"github.com/influxdb/influxdb/client/v2"
+	"github.com/influxdata/influxdb/client/v2"
 	"golang.org/x/net/html"
 	"io/ioutil"
 	"net/http"
