@@ -17,9 +17,11 @@ package main
 
 import (
 	"fmt"
+	"github.com/mreiferson/go-httpclient"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestFetchMainUrl(t *testing.T) {
@@ -43,8 +45,19 @@ func TestFetchMainUrl(t *testing.T) {
 	}))
 	defer ts.Close()
 
+	//Set a transport with timeouts
+	transport := &httpclient.Transport{
+		ConnectTimeout:        1 * time.Second,
+		RequestTimeout:        1 * time.Second,
+		ResponseHeaderTimeout: 1 * time.Second,
+	}
+	defer transport.Close()
+
+	//Set an http client with this transport
+	client := &http.Client{Transport: transport}
+
 	for _, tt := range tests {
-		assets, mainUrlStat := fetchMainUrl(ts.URL)
+		assets, mainUrlStat := fetchMainUrl(ts.URL, client)
 
 		if len(assets) != tt.assetCount {
 			t.Errorf("fetchMainUrl do not returned %d elements but %d", tt.assetCount, len(assets))

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"github.com/fatih/color"
 	"github.com/influxdata/influxdb/client/v2"
+	"github.com/mreiferson/go-httpclient"
 	"golang.org/x/net/html"
 	"io/ioutil"
 	"net/http"
@@ -55,13 +56,16 @@ var (
 
 //cli flags
 var (
-	url            = flag.String("url", "", "The url to get.")
-	version        = flag.Bool("version", false, "Print version information.")
-	verbose        = flag.Bool("verbose", false, "Print more informations.")
-	parallelFetch  = flag.Int("parallel", 8, "Number of parallel fetch to launch. 0 means unlimited.")
-	useInflux      = flag.Bool("use-influx", false, "Send data to influxdb.")
-	influxUrl      = flag.String("influx-url", "http://localhost:8086", "The influx database access url.")
-	influxDatabase = flag.String("influx-database", "elmo", "The influx database name.")
+	url                   = flag.String("url", "", "The url to get.")
+	version               = flag.Bool("version", false, "Print version information.")
+	verbose               = flag.Bool("verbose", false, "Print more informations.")
+	parallelFetch         = flag.Int("parallel", 8, "Number of parallel fetch to launch. 0 means unlimited.")
+	connectTimeout        = flag.Int("connect-timeout", 1000, "Connect timeout in ms.")
+	requestTimeout        = flag.Int("request-timeout", 10000, "Request timeout in ms.")
+	responseHeaderTimeout = flag.Int("response-header-timeout", 5000, "Response header timeout in ms.")
+	useInflux             = flag.Bool("use-influx", false, "Send data to influxdb.")
+	influxUrl             = flag.String("influx-url", "http://localhost:8086", "The influx database access url.")
+	influxDatabase        = flag.String("influx-database", "elmo", "The influx database name.")
 )
 
 var globalStartTime = time.Now()
@@ -94,7 +98,7 @@ func getLink(t html.Token) (ok bool, link string) {
 }
 
 // Extract all http** links from a given webpage
-func fetchMainUrl(url string) ([]string, downloadStatistic) {
+func fetchMainUrl(url string, client *http.Client) ([]string, downloadStatistic) {
 
 	//List of urls found
 	var assets []string
@@ -106,10 +110,11 @@ func fetchMainUrl(url string) ([]string, downloadStatistic) {
 	t0 := time.Now()
 
 	//launch the query
-	resp, err := http.Get(url)
+	req, _ := http.NewRequest("GET", url, nil)
+	resp, err := client.Do(req)
 
 	if err != nil {
-		fmt.Println("ERROR: Failed to get input url \"" + url + "\"")
+		fmt.Println(red("ERROR"), err)
 		return assets, stat
 	}
 
@@ -185,7 +190,7 @@ func extractAssets(body []byte) []string {
 }
 
 //Fetch an asset and get downloadStatistic
-func fetchAsset(url string, chStat chan downloadStatistic, chFinished chan bool) {
+func fetchAsset(url string, client *http.Client, chStat chan downloadStatistic, chFinished chan bool) {
 
 	//set downloadStatistic
 	stat := downloadStatistic{url, 0, 0, 0}
@@ -194,10 +199,11 @@ func fetchAsset(url string, chStat chan downloadStatistic, chFinished chan bool)
 	t0 := time.Now()
 
 	//launch the query
-	resp, err := http.Get(url)
+	req, _ := http.NewRequest("GET", url, nil)
+	resp, err := client.Do(req)
 
 	if err != nil {
-		fmt.Println("ERROR: Failed to get link \"" + url + "\"")
+		fmt.Println(red("ERROR"), err)
 		return
 	}
 
@@ -289,18 +295,29 @@ func main() {
 		return
 	}
 
+	//Set a transport with timeouts
+	transport := &httpclient.Transport{
+		ConnectTimeout:        time.Duration(*connectTimeout) * time.Millisecond,
+		RequestTimeout:        time.Duration(*requestTimeout) * time.Millisecond,
+		ResponseHeaderTimeout: time.Duration(*responseHeaderTimeout) * time.Millisecond,
+	}
+	defer transport.Close()
+
+	//Set an http client with this transport
+	client := &http.Client{Transport: transport}
+
 	//Set timer for global time
 	t0 := time.Now()
 
 	//Fetch the main url and get inner links
-	assets, mainUrlStat = fetchMainUrl(*url)
+	assets, mainUrlStat = fetchMainUrl(*url, client)
 	gstat.totalResponseSize += mainUrlStat.responseSize
 
 	//Fetch the firsts inner links
 	for _, url := range assets {
 		//fmt.Printf("%d/%d: call %s\n",currentUrlIndex, len(assets)-1, url)
 
-		go fetchAsset(url, chUrls, chFinished)
+		go fetchAsset(url, client, chUrls, chFinished)
 
 		//limit calls count to max_concurrent_call
 		currentUrlIndex++
@@ -318,7 +335,7 @@ func main() {
 		//got an asset, fetch next if exist
 		case <-chFinished:
 			if currentUrlIndex < len(assets) {
-				go fetchAsset(assets[currentUrlIndex], chUrls, chFinished)
+				go fetchAsset(assets[currentUrlIndex], client, chUrls, chFinished)
 			}
 			c++
 			currentUrlIndex++
@@ -336,6 +353,6 @@ func main() {
 	}
 
 	// We're done! Print the results...
-	fmt.Printf("The call took %v to run.\n", cyan(gstat.totalResponseTime))
+	fmt.Printf("Total time: %v.\n", cyan(gstat.totalResponseTime))
 	fmt.Printf("Total size: %v%s.\n", white(gstat.totalResponseSize/1024), white("kb"))
 }
