@@ -1,16 +1,16 @@
 /*
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>. 1
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>. 1
 */
 
 package main
@@ -19,16 +19,17 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"github.com/fatih/color"
+	"github.com/influxdb/influxdb/client/v2"
 	"golang.org/x/net/html"
 	"io/ioutil"
 	"net/http"
 	"strings"
 	"time"
-	"github.com/fatih/color"
 )
 
 type downloadStatistic struct {
-	url           string
+	url          string
 	responseTime time.Duration
 	responseSize int
 	statusCode   int
@@ -47,16 +48,20 @@ var (
 //colors !
 var (
 	yellow = color.New(color.FgYellow).SprintFunc()
-	cyan = color.New(color.FgCyan).SprintFunc()
-	white = color.New(color.FgWhite).SprintFunc()
+	cyan   = color.New(color.FgCyan).SprintFunc()
+	white  = color.New(color.FgWhite).SprintFunc()
+	red    = color.New(color.FgRed, color.Bold).SprintFunc()
 )
 
 //cli flags
 var (
-	url = flag.String("url", "", "The url to get.")
-	version = flag.Bool("version", false, "Print version information.")
-	verbose = flag.Bool("verbose", false, "Print more informations.")
-	parallelFetch = flag.Int("parallel", 8, "Number of parallel fetch to launch. 0 means unlimited.")
+	url            = flag.String("url", "", "The url to get.")
+	version        = flag.Bool("version", false, "Print version information.")
+	verbose        = flag.Bool("verbose", false, "Print more informations.")
+	parallelFetch  = flag.Int("parallel", 8, "Number of parallel fetch to launch. 0 means unlimited.")
+	useInflux      = flag.Bool("use-influx", false, "Send data to influxdb.")
+	influxUrl      = flag.String("influx-url", "http://localhost:8086", "The influx database access url.")
+	influxDatabase = flag.String("influx-database", "elmo", "The influx database name.")
 )
 
 var globalStartTime = time.Now()
@@ -124,8 +129,8 @@ func fetchMainUrl(url string) ([]string, downloadStatistic) {
 	stat.responseSize = len(body)
 
 	//Print download
-	if (*verbose) {
-		fmt.Printf("%s\t%s %s %v %v%s\n", time.Now().Sub(globalStartTime), yellow(stat.statusCode), stat.url, cyan(stat.responseTime), white(stat.responseSize),white("b"))
+	if *verbose {
+		fmt.Printf("%s\t%s %s %v %v%s\n", time.Now().Sub(globalStartTime), yellow(stat.statusCode), stat.url, cyan(stat.responseTime), white(stat.responseSize), white("b"))
 	}
 
 	//extract assets from html
@@ -133,7 +138,6 @@ func fetchMainUrl(url string) ([]string, downloadStatistic) {
 
 	return assets, stat
 }
-
 
 //Get a html body and extract all assets links
 func extractAssets(body []byte) []string {
@@ -215,11 +219,54 @@ func fetchAsset(url string, chStat chan downloadStatistic, chFinished chan bool)
 	stat.responseSize = len(body)
 
 	//Print download
-	if (*verbose) {
-		fmt.Printf("%s\t%s %s %v %v%s\n", time.Now().Sub(globalStartTime), yellow(stat.statusCode), stat.url, cyan(stat.responseTime), white(stat.responseSize),white("b"))
+	if *verbose {
+		fmt.Printf("%s\t%s %s %v %v%s\n", time.Now().Sub(globalStartTime), yellow(stat.statusCode), stat.url, cyan(stat.responseTime), white(stat.responseSize), white("b"))
 	}
 
 	chStat <- stat
+}
+
+//Send statistic data to influxdb
+func sendstatsToInflux(assetsStats []downloadStatistic) {
+	// Make client
+	c, err := client.NewHTTPClient(client.HTTPConfig{Addr: *influxUrl})
+	if err != nil {
+		fmt.Println(red("Influxdb - error creating InfluxDB Client:\n"), err.Error())
+	}
+
+	// Create a new point batch
+	bp, _ := client.NewBatchPoints(client.BatchPointsConfig{
+		Database:  *influxDatabase,
+		Precision: "s",
+	})
+
+	//we want all the points of the batch to the same time
+	influxTime := time.Now()
+
+	//prepare data for influx
+	for _, stat := range assetsStats {
+		// Create a point and add to batch
+		tags := map[string]string{"url": stat.url}
+		//var tags map[string]string
+		fields := map[string]interface{}{
+			"responseTime": int64(stat.responseTime),
+			"responseSize": stat.responseSize,
+		}
+		pt, err := client.NewPoint(*url, tags, fields, influxTime)
+		if err != nil {
+			fmt.Println(red("Influxdb - error:\n"), err.Error())
+		}
+		bp.AddPoint(pt)
+		//if (*verbose) {
+		//	fmt.Printf("influx: %v\n", pt)
+		//}
+	}
+
+	//Send data to influx
+	err = c.Write(bp)
+	if err != nil {
+		fmt.Println(red("Influxdb - error:\n"), err.Error())
+	}
 }
 
 func main() {
@@ -266,7 +313,7 @@ func main() {
 	for c := 0; c < len(assets); {
 		select {
 		case stat := <-chUrls:
-			assetsStats = append(assetsStats,stat)
+			assetsStats = append(assetsStats, stat)
 			gstat.totalResponseSize += stat.responseSize
 		//got an asset, fetch next if exist
 		case <-chFinished:
@@ -283,16 +330,12 @@ func main() {
 	//Set timer for global time
 	gstat.totalResponseTime += time.Now().Sub(t0)
 
-	//Use that to send data to influx
-	//for _, stat := range assetsStats {
-	//	if (*verbose) {
-	//		fmt.Printf("%s\t%s %s %v %v%s\n", time.Now().Sub(globalStartTime), yellow(stat.statusCode), stat.url, cyan(stat.responseTime), white(stat.responseSize),white("b"))
-	//	}
-
-	//}
+	// send data to influxdb
+	if *useInflux {
+		sendstatsToInflux(assetsStats)
+	}
 
 	// We're done! Print the results...
 	fmt.Printf("The call took %v to run.\n", cyan(gstat.totalResponseTime))
 	fmt.Printf("Total size: %v%s.\n", white(gstat.totalResponseSize/1024), white("kb"))
-
 }
