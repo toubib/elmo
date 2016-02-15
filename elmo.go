@@ -207,7 +207,7 @@ func fetchAsset(url string, client *http.Client, chStat chan downloadStatistic, 
 	//launch the query
 	req, _ := http.NewRequest("GET", url, nil)
 
-	if checkIfDomainAllowed(req.URL.Host) == false {
+	if checkIfDomainAllowed(&req.URL.Host) == false {
 		return
 	}
 
@@ -282,7 +282,7 @@ func sendstatsToInflux(assetsStats []downloadStatistic) {
 }
 
 // test if the given domain is allowed to fetch
-func checkIfDomainAllowed(url string) bool {
+func checkIfDomainAllowed(host *string) bool {
 
 	if *assetsAllowedDomains == "" {
 		return true
@@ -291,7 +291,7 @@ func checkIfDomainAllowed(url string) bool {
 	allowedDomains := strings.Split(*assetsAllowedDomains, ",")
 
 	for _, domain := range allowedDomains {
-		if domain == url {
+		if domain == *host {
 			return true
 		}
 	}
