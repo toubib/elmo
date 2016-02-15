@@ -72,7 +72,7 @@ var (
 var globalStartTime = time.Now()
 
 // Helper function to pull the  attribute from a Token
-func getLink(t html.Token) (ok bool, link string) {
+func getLink(t *html.Token) (ok bool, link string) {
 
 	// Check link types, we need only stylesheet
 	if t.Data == "link" {
@@ -99,19 +99,19 @@ func getLink(t html.Token) (ok bool, link string) {
 }
 
 // Extract all http** links from a given webpage
-func fetchMainUrl(url string, client *http.Client) ([]string, downloadStatistic) {
+func fetchMainUrl(url *string, client *http.Client) ([]string, downloadStatistic) {
 
 	//List of urls found
 	var assets []string
 
 	//set downloadStatistic
-	stat := downloadStatistic{url, 0, 0, 0}
+	stat := downloadStatistic{*url, 0, 0, 0}
 
 	//timer before
 	t0 := time.Now()
 
 	//launch the query
-	req, _ := http.NewRequest("GET", url, nil)
+	req, _ := http.NewRequest("GET", *url, nil)
 	resp, err := client.Do(req)
 
 	if err != nil {
@@ -127,7 +127,7 @@ func fetchMainUrl(url string, client *http.Client) ([]string, downloadStatistic)
 	body, err := ioutil.ReadAll(resp.Body)
 
 	if err != nil {
-		fmt.Println("ERROR: Failed to read body for input url \"" + url + "\"")
+		fmt.Println("ERROR: Failed to read body for input url \"" + *url + "\"")
 		return assets, stat
 	}
 
@@ -140,17 +140,17 @@ func fetchMainUrl(url string, client *http.Client) ([]string, downloadStatistic)
 	}
 
 	//extract assets from html
-	assets = extractAssets(body)
+	assets = extractAssets(&body)
 
 	return assets, stat
 }
 
 //Get a html body and extract all assets links
-func extractAssets(body []byte) []string {
+func extractAssets(body *[]byte) []string {
 	var assets []string
 
 	//create the tokenizer
-	z := html.NewTokenizer(bytes.NewReader(body))
+	z := html.NewTokenizer(bytes.NewReader(*body))
 
 	for {
 		tt := z.Next()
@@ -174,7 +174,7 @@ func extractAssets(body []byte) []string {
 				continue
 			}
 
-			linkFound, url := getLink(t)
+			linkFound, url := getLink(&t)
 
 			// We do not found a link
 			if !linkFound {
@@ -191,7 +191,7 @@ func extractAssets(body []byte) []string {
 }
 
 //Fetch an asset and get downloadStatistic
-func fetchAsset(url string, client *http.Client, chStat chan downloadStatistic, chFinished chan bool) {
+func fetchAsset(url *string, client *http.Client, chStat chan downloadStatistic, chFinished chan bool) {
 
 	defer func() {
 		// Notify that we're done after this function
@@ -199,13 +199,13 @@ func fetchAsset(url string, client *http.Client, chStat chan downloadStatistic, 
 	}()
 
 	//set downloadStatistic
-	stat := downloadStatistic{url, 0, 0, 0}
+	stat := downloadStatistic{*url, 0, 0, 0}
 
 	//timer before
 	t0 := time.Now()
 
 	//launch the query
-	req, _ := http.NewRequest("GET", url, nil)
+	req, _ := http.NewRequest("GET", *url, nil)
 
 	if checkIfDomainAllowed(&req.URL.Host) == false {
 		return
@@ -239,7 +239,7 @@ func fetchAsset(url string, client *http.Client, chStat chan downloadStatistic, 
 }
 
 //Send statistic data to influxdb
-func sendstatsToInflux(assetsStats []downloadStatistic) {
+func sendstatsToInflux(assetsStats *[]downloadStatistic) {
 	// Make client
 	c, err := client.NewHTTPClient(client.HTTPConfig{Addr: *influxUrl})
 	if err != nil {
@@ -256,7 +256,7 @@ func sendstatsToInflux(assetsStats []downloadStatistic) {
 	influxTime := time.Now()
 
 	//prepare data for influx
-	for _, stat := range assetsStats {
+	for _, stat := range *assetsStats {
 		// Create a point and add to batch
 		tags := map[string]string{"url": stat.url}
 		//var tags map[string]string
@@ -334,14 +334,14 @@ func main() {
 	t0 := time.Now()
 
 	//Fetch the main url and get inner links
-	assets, mainUrlStat = fetchMainUrl(*url, client)
+	assets, mainUrlStat = fetchMainUrl(url, client)
 	gstat.totalResponseSize += mainUrlStat.responseSize
 
 	//Fetch the firsts inner links
 	for _, url := range assets {
 		//fmt.Printf("%d/%d: call %s\n",currentUrlIndex, len(assets)-1, url)
 
-		go fetchAsset(url, client, chUrls, chFinished)
+		go fetchAsset(&url, client, chUrls, chFinished)
 
 		//limit calls count to max_concurrent_call
 		currentUrlIndex++
@@ -359,7 +359,7 @@ func main() {
 		//got an asset, fetch next if exist
 		case <-chFinished:
 			if currentUrlIndex < len(assets) {
-				go fetchAsset(assets[currentUrlIndex], client, chUrls, chFinished)
+				go fetchAsset(&assets[currentUrlIndex], client, chUrls, chFinished)
 			}
 			c++
 			currentUrlIndex++
@@ -373,7 +373,7 @@ func main() {
 
 	// send data to influxdb
 	if *useInflux {
-		sendstatsToInflux(assetsStats)
+		sendstatsToInflux(&assetsStats)
 	}
 
 	// We're done! Print the results...
