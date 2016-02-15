@@ -66,6 +66,7 @@ var (
 	useInflux             = flag.Bool("use-influx", false, "Send data to influxdb.")
 	influxUrl             = flag.String("influx-url", "http://localhost:8086", "The influx database access url.")
 	influxDatabase        = flag.String("influx-database", "elmo", "The influx database name.")
+	assetsAllowedDomains  = flag.String("assets-allowed-domains", "", "List of allowed assets domains to fetch from, comma separated.")
 )
 
 var globalStartTime = time.Now()
@@ -192,6 +193,11 @@ func extractAssets(body []byte) []string {
 //Fetch an asset and get downloadStatistic
 func fetchAsset(url string, client *http.Client, chStat chan downloadStatistic, chFinished chan bool) {
 
+	defer func() {
+		// Notify that we're done after this function
+		chFinished <- true
+	}()
+
 	//set downloadStatistic
 	stat := downloadStatistic{url, 0, 0, 0}
 
@@ -200,6 +206,11 @@ func fetchAsset(url string, client *http.Client, chStat chan downloadStatistic, 
 
 	//launch the query
 	req, _ := http.NewRequest("GET", url, nil)
+
+	if checkIfDomainAllowed(req.URL.Host) == false {
+		return
+	}
+
 	resp, err := client.Do(req)
 
 	if err != nil {
@@ -210,11 +221,6 @@ func fetchAsset(url string, client *http.Client, chStat chan downloadStatistic, 
 	//Set stat
 	stat.responseTime = time.Now().Sub(t0)
 	stat.statusCode = resp.StatusCode
-
-	defer func() {
-		// Notify that we're done after this function
-		chFinished <- true
-	}()
 
 	//get the body size
 	b := resp.Body
@@ -273,6 +279,24 @@ func sendstatsToInflux(assetsStats []downloadStatistic) {
 	if err != nil {
 		fmt.Println(red("Influxdb - error:\n"), err.Error())
 	}
+}
+
+// test if the given domain is allowed to fetch
+func checkIfDomainAllowed(url string) bool {
+
+	if *assetsAllowedDomains == "" {
+		return true
+	}
+
+	allowedDomains := strings.Split(*assetsAllowedDomains, ",")
+
+	for _, domain := range allowedDomains {
+		if domain == url {
+			return true
+		}
+	}
+
+	return false
 }
 
 func main() {

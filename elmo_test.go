@@ -68,3 +68,29 @@ func TestFetchMainUrl(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckIfDomainAllowed(t *testing.T) {
+
+	tests := []struct {
+		url string
+		result bool
+	}{
+		{"http://test.com", true},
+		{"https://test.com", true},
+		{"http://test2.com", false},
+		{"http://test3.com", true},
+		{"http://test4.com", false},
+	}
+
+	//force assets-allowed-domains flag
+	*assetsAllowedDomains = "test.com,test3.com"
+
+	for _, tt := range tests {
+		req, _ := http.NewRequest("GET", tt.url, nil)
+
+		testResult := ( checkIfDomainAllowed(req.URL.Host) == tt.result )
+		if !testResult {
+			t.Errorf("checkIfDomainAllowed (%v) has not returned %v but %v", tt.url, tt.result, testResult )
+		}
+	}
+}
