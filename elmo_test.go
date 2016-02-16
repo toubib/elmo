@@ -72,7 +72,7 @@ func TestFetchMainUrl(t *testing.T) {
 func TestCheckIfDomainAllowed(t *testing.T) {
 
 	tests := []struct {
-		url string
+		url    string
 		result bool
 	}{
 		{"http://test.com", true},
@@ -88,9 +88,9 @@ func TestCheckIfDomainAllowed(t *testing.T) {
 	for _, tt := range tests {
 		req, _ := http.NewRequest("GET", tt.url, nil)
 
-		testResult := ( checkIfDomainAllowed(&req.URL.Host) == tt.result )
+		testResult := (checkIfDomainAllowed(&req.URL.Host) == tt.result)
 		if !testResult {
-			t.Errorf("checkIfDomainAllowed (%v) has not returned %v but %v", tt.url, tt.result, testResult )
+			t.Errorf("checkIfDomainAllowed (%v) has not returned %v but %v", tt.url, tt.result, testResult)
 		}
 	}
 }
