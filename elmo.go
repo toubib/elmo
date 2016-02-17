@@ -25,6 +25,7 @@ import (
 	"golang.org/x/net/html"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -52,11 +53,12 @@ var (
 	cyan   = color.New(color.FgCyan).SprintFunc()
 	white  = color.New(color.FgWhite).SprintFunc()
 	red    = color.New(color.FgRed, color.Bold).SprintFunc()
+	green  = color.New(color.FgGreen, color.Bold).SprintFunc()
 )
 
 //cli flags
 var (
-	url                   = flag.String("url", "", "The url to get.")
+	mainUrl                   = flag.String("url", "", "The url to get.")
 	version               = flag.Bool("version", false, "Print version information.")
 	verbose               = flag.Bool("verbose", false, "Print more informations.")
 	parallelFetch         = flag.Int("parallel", 8, "Number of parallel fetch to launch. 0 means unlimited.")
@@ -85,6 +87,7 @@ func getLink(t *html.Token) (ok bool, link string) {
 
 	}
 
+	fmt.Println(t)
 	// Iterate over all of the Token's attributes until we find an "src"
 	for _, a := range t.Attr {
 		if a.Key == "src" || a.Key == "href" {
@@ -93,25 +96,26 @@ func getLink(t *html.Token) (ok bool, link string) {
 		}
 	}
 
+	fmt.Println(link)
 	// "bare" return will return the variables (ok, href) as defined in
 	// the function definition
 	return
 }
 
 // Extract all http** links from a given webpage
-func fetchMainUrl(url *string, client *http.Client) ([]string, downloadStatistic) {
+func fetchMainUrl(mainUrl *string, client *http.Client) ([]string, downloadStatistic) {
 
 	//List of urls found
 	var assets []string
 
 	//set downloadStatistic
-	stat := downloadStatistic{*url, 0, 0, 0}
+	stat := downloadStatistic{*mainUrl, 0, 0, 0}
 
 	//timer before
 	t0 := time.Now()
 
 	//launch the query
-	req, _ := http.NewRequest("GET", *url, nil)
+	req, _ := http.NewRequest("GET", *mainUrl, nil)
 	resp, err := client.Do(req)
 
 	if err != nil {
@@ -127,7 +131,7 @@ func fetchMainUrl(url *string, client *http.Client) ([]string, downloadStatistic
 	body, err := ioutil.ReadAll(resp.Body)
 
 	if err != nil {
-		fmt.Println("ERROR: Failed to read body for input url \"" + *url + "\"")
+		fmt.Println("ERROR: Failed to read body for input url \"" + *mainUrl + "\"")
 		return assets, stat
 	}
 
@@ -136,17 +140,17 @@ func fetchMainUrl(url *string, client *http.Client) ([]string, downloadStatistic
 
 	//Print download
 	if *verbose {
-		fmt.Printf("%s\t%s %s %v %v%s\n", time.Now().Sub(globalStartTime), yellow(stat.statusCode), stat.url, cyan(stat.responseTime), white(stat.responseSize), white("b"))
+		fmt.Printf("%s\t%s %s %v %v%s\n", time.Now().Sub(globalStartTime), green(stat.statusCode), stat.url, cyan(stat.responseTime), white(stat.responseSize), white("b"))
 	}
 
 	//extract assets from html
-	assets = extractAssets(&body)
+	assets = extractAssets(&body, req)
 
 	return assets, stat
 }
 
 //Get a html body and extract all assets links
-func extractAssets(body *[]byte) []string {
+func extractAssets(body *[]byte, mainRequest *http.Request) []string {
 	var assets []string
 
 	//create the tokenizer
@@ -154,6 +158,7 @@ func extractAssets(body *[]byte) []string {
 
 	for {
 		tt := z.Next()
+
 
 		switch tt {
 		case html.ErrorToken:
@@ -174,24 +179,35 @@ func extractAssets(body *[]byte) []string {
 				continue
 			}
 
-			linkFound, url := getLink(&t)
+			linkFound, assetUrl := getLink(&t)
 
 			// We do not found a link
 			if !linkFound {
 				continue
 			}
 
-			// Make sure the url begines in http**
-			hasProto := strings.Index(url, "http") == 0
-			if hasProto {
-				assets = append(assets, url)
+			// Make sure the url start with http
+			if strings.Index(assetUrl, "http") != 0 {
+				fmt.Println(yellow("try to build"))
+				//get asset url object
+				u, err := url.Parse(assetUrl)
+				if err != nil {
+					fmt.Println(red("ERROR -- "), err)
+					continue
+				}
+				fmt.Println(yellow("u=",u))
+				fmt.Println(yellow("mainRequest=",mainRequest))
+				assetUrl = mainRequest.URL.ResolveReference(u).String()
+				fmt.Println(yellow("assetUrl=",assetUrl, &assetUrl))
 			}
+			fmt.Println(yellow("add assetUrl ",assetUrl, &assetUrl))
+			assets = append(assets, assetUrl)
 		}
 	}
 }
 
 //Fetch an asset and get downloadStatistic
-func fetchAsset(url *string, client *http.Client, chStat chan downloadStatistic, chFinished chan bool) {
+func fetchAsset(assetUrl *string, client *http.Client, chStat chan downloadStatistic, chFinished chan bool) {
 
 	defer func() {
 		// Notify that we're done after this function
@@ -199,13 +215,13 @@ func fetchAsset(url *string, client *http.Client, chStat chan downloadStatistic,
 	}()
 
 	//set downloadStatistic
-	stat := downloadStatistic{*url, 0, 0, 0}
+	stat := downloadStatistic{*assetUrl, 0, 0, 0}
 
 	//timer before
 	t0 := time.Now()
 
 	//launch the query
-	req, _ := http.NewRequest("GET", *url, nil)
+	req, _ := http.NewRequest("GET", *assetUrl, nil)
 
 	if checkIfDomainAllowed(&req.URL.Host) == false {
 		return
@@ -214,7 +230,7 @@ func fetchAsset(url *string, client *http.Client, chStat chan downloadStatistic,
 	resp, err := client.Do(req)
 
 	if err != nil {
-		fmt.Println(red("ERROR"), err)
+		fmt.Println(red("ERROR - "), err)
 		return
 	}
 
@@ -232,7 +248,7 @@ func fetchAsset(url *string, client *http.Client, chStat chan downloadStatistic,
 
 	//Print download
 	if *verbose {
-		fmt.Printf("%s\t%s %s %v %v%s\n", time.Now().Sub(globalStartTime), yellow(stat.statusCode), stat.url, cyan(stat.responseTime), white(stat.responseSize), white("b"))
+		fmt.Printf("%s\t%s %s %v %v%s\n", time.Now().Sub(globalStartTime), green(stat.statusCode), stat.url, cyan(stat.responseTime), white(stat.responseSize), white("b"))
 	}
 
 	chStat <- stat
@@ -264,7 +280,7 @@ func sendstatsToInflux(assetsStats *[]downloadStatistic) {
 			"responseTime": int64(stat.responseTime),
 			"responseSize": stat.responseSize,
 		}
-		pt, err := client.NewPoint(*url, tags, fields, influxTime)
+		pt, err := client.NewPoint(*mainUrl, tags, fields, influxTime)
 		if err != nil {
 			fmt.Println(red("Influxdb - error:\n"), err.Error())
 		}
@@ -334,14 +350,14 @@ func main() {
 	t0 := time.Now()
 
 	//Fetch the main url and get inner links
-	assets, mainUrlStat = fetchMainUrl(url, client)
+	assets, mainUrlStat = fetchMainUrl(mainUrl, client)
 	gstat.totalResponseSize += mainUrlStat.responseSize
 
 	//Fetch the firsts inner links
-	for _, url := range assets {
-		//fmt.Printf("%d/%d: call %s\n",currentUrlIndex, len(assets)-1, url)
+	for _, assetUrl := range assets {
+		//fmt.Printf("%d/%d: call %s\n",currentUrlIndex, len(assets)-1, assetUrl)
 
-		go fetchAsset(&url, client, chUrls, chFinished)
+		go fetchAsset(&assetUrl, client, chUrls, chFinished)
 
 		//limit calls count to max_concurrent_call
 		currentUrlIndex++
