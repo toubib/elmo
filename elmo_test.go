@@ -20,9 +20,13 @@ import (
 	"github.com/mreiferson/go-httpclient"
 	"net/http"
 	"net/http/httptest"
+//	"net/url"
 	"testing"
 	"time"
 )
+
+//TODO add test dl 3 differents images and check images sizes and total size
+//bug: all assets are sames :(
 
 func TestFetchMainUrl(t *testing.T) {
 
@@ -41,7 +45,10 @@ func TestFetchMainUrl(t *testing.T) {
 	}{{5, 385}}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, htmlBody)
+		switch r.URL.String() {
+		case "/":
+			fmt.Fprintln(w, htmlBody)
+		}
 	}))
 	defer ts.Close()
 
@@ -67,6 +74,74 @@ func TestFetchMainUrl(t *testing.T) {
 			t.Errorf("mainUrlStat.responseSize is not returned %d but %d", tt.responseSize, mainUrlStat.responseSize)
 		}
 	}
+}
+
+func TestFetchAsset(t *testing.T) {
+	tests := []struct {
+		assetUrl string
+		responseSize int
+	}{
+		{"/1.png", 1},
+		{"/É.png", 2},
+		{"/3.png", 3},
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.String() {
+		case "/1.png":
+			fmt.Fprintln(w, "0")
+		case "/É.png":
+			fmt.Fprintln(w, "0000")
+		case "/3.png":
+			fmt.Fprintln(w, "00000000")
+		}
+	}))
+	defer ts.Close()
+
+	//Set a transport with timeouts
+	transport := &httpclient.Transport{
+		ConnectTimeout:        1 * time.Second,
+		RequestTimeout:        1 * time.Second,
+		ResponseHeaderTimeout: 1 * time.Second,
+	}
+	defer transport.Close()
+
+	//Set an http client with this transport
+	client := &http.Client{Transport: transport}
+
+	// Channels
+	chUrls := make(chan downloadStatistic)
+	chFinished := make(chan bool)
+
+	for _, tt := range tests {
+
+		//make absolute url
+		u := ts.URL + tt.assetUrl
+
+		// fetch asset
+		go fetchAsset(u, client, chUrls, chFinished)
+	}
+
+	// Subscribe to channels to wait for go routine
+	for c := 0; c < len(tests); {
+		select {
+		case stat := <-chUrls:
+			fmt.Println(tests[0])
+			fmt.Println("stat: ",stat)
+		//	assetsStats = append(assetsStats, stat)
+		//	gstat.totalResponseSize += stat.responseSize
+		//got an asset, fetch next if exist
+		case <-chFinished:
+			c++
+		}
+	}
+
+	close(chUrls)
+
+	//if mainUrlStat.responseSize != tt.responseSize {
+	//	t.Errorf("mainUrlStat.responseSize is not returned %d but %d", tt.responseSize, mainUrlStat.responseSize)
+	//}
+
 }
 
 func TestCheckIfDomainAllowed(t *testing.T) {

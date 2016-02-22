@@ -87,7 +87,6 @@ func getLink(t *html.Token) (ok bool, link string) {
 
 	}
 
-	fmt.Println(t)
 	// Iterate over all of the Token's attributes until we find an "src"
 	for _, a := range t.Attr {
 		if a.Key == "src" || a.Key == "href" {
@@ -96,9 +95,6 @@ func getLink(t *html.Token) (ok bool, link string) {
 		}
 	}
 
-	fmt.Println(link)
-	// "bare" return will return the variables (ok, href) as defined in
-	// the function definition
 	return
 }
 
@@ -188,26 +184,22 @@ func extractAssets(body *[]byte, mainRequest *http.Request) []string {
 
 			// Make sure the url start with http
 			if strings.Index(assetUrl, "http") != 0 {
-				fmt.Println(yellow("try to build"))
 				//get asset url object
 				u, err := url.Parse(assetUrl)
 				if err != nil {
 					fmt.Println(red("ERROR -- "), err)
 					continue
 				}
-				fmt.Println(yellow("u=",u))
-				fmt.Println(yellow("mainRequest=",mainRequest))
 				assetUrl = mainRequest.URL.ResolveReference(u).String()
-				fmt.Println(yellow("assetUrl=",assetUrl, &assetUrl))
 			}
-			fmt.Println(yellow("add assetUrl ",assetUrl, &assetUrl))
 			assets = append(assets, assetUrl)
 		}
 	}
 }
 
 //Fetch an asset and get downloadStatistic
-func fetchAsset(assetUrl *string, client *http.Client, chStat chan downloadStatistic, chFinished chan bool) {
+func fetchAsset(assetUrl string, client *http.Client, chStat chan downloadStatistic, chFinished chan bool) {
+	fmt.Println(assetUrl)
 
 	defer func() {
 		// Notify that we're done after this function
@@ -215,13 +207,13 @@ func fetchAsset(assetUrl *string, client *http.Client, chStat chan downloadStati
 	}()
 
 	//set downloadStatistic
-	stat := downloadStatistic{*assetUrl, 0, 0, 0}
+	stat := downloadStatistic{assetUrl, 0, 0, 0}
 
 	//timer before
 	t0 := time.Now()
 
 	//launch the query
-	req, _ := http.NewRequest("GET", *assetUrl, nil)
+	req, _ := http.NewRequest("GET", assetUrl, nil)
 
 	if checkIfDomainAllowed(&req.URL.Host) == false {
 		return
@@ -357,7 +349,7 @@ func main() {
 	for _, assetUrl := range assets {
 		//fmt.Printf("%d/%d: call %s\n",currentUrlIndex, len(assets)-1, assetUrl)
 
-		go fetchAsset(&assetUrl, client, chUrls, chFinished)
+		go fetchAsset(assetUrl, client, chUrls, chFinished)
 
 		//limit calls count to max_concurrent_call
 		currentUrlIndex++
@@ -375,7 +367,7 @@ func main() {
 		//got an asset, fetch next if exist
 		case <-chFinished:
 			if currentUrlIndex < len(assets) {
-				go fetchAsset(&assets[currentUrlIndex], client, chUrls, chFinished)
+				go fetchAsset(assets[currentUrlIndex], client, chUrls, chFinished)
 			}
 			c++
 			currentUrlIndex++
