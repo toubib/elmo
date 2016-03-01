@@ -26,6 +26,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -85,6 +86,31 @@ func getLink(t *html.Token) (ok bool, link string) {
 			}
 		}
 
+	}
+
+	// search for css style assets on div
+	if t.Data == "div" {
+		ok = false
+		for _, a := range t.Attr {
+
+			// search for style key
+			if a.Key == "style" {
+
+				// search url
+				if strings.Contains(a.Val, "url(") {
+					r, _ := regexp.Compile(`url *\( *['"](.*)['"] *\)`)
+					searchResult := r.FindStringSubmatch(a.Val)
+
+					//url found
+					if searchResult != nil {
+						link = searchResult[1]
+						ok = true
+					}
+					return
+				}
+			}
+		}
+		return
 	}
 
 	// Iterate over all of the Token's attributes until we find an "src"
@@ -167,6 +193,7 @@ func extractAssets(body *[]byte, mainRequest *http.Request) []string {
 			if t.Data != "img" &&
 				t.Data != "script" &&
 				t.Data != "embed" &&
+				t.Data != "div" && //only url in styles
 				t.Data != "link" && //only stylesheet
 				t.Data != "input" {
 
@@ -179,6 +206,7 @@ func extractAssets(body *[]byte, mainRequest *http.Request) []string {
 			if !linkFound {
 				continue
 			}
+			//fmt.Println("link found:", assetUrl)
 
 			// Make sure the url start with http
 			if strings.Index(assetUrl, "http") != 0 {
