@@ -20,13 +20,10 @@ import (
 	"github.com/mreiferson/go-httpclient"
 	"net/http"
 	"net/http/httptest"
-//	"net/url"
+	//	"net/url"
 	"testing"
 	"time"
 )
-
-//TODO add test dl 3 differents images and check images sizes and total size
-//bug: all assets are sames :(
 
 func TestFetchMainUrl(t *testing.T) {
 
@@ -78,7 +75,7 @@ func TestFetchMainUrl(t *testing.T) {
 
 func TestFetchAsset(t *testing.T) {
 	tests := []struct {
-		assetUrl string
+		assetUrl     string
 		responseSize int
 	}{
 		{"/1.png", 1},
@@ -127,7 +124,7 @@ func TestFetchAsset(t *testing.T) {
 		select {
 		case stat := <-chUrls:
 			fmt.Println(tests[0])
-			fmt.Println("stat: ",stat)
+			fmt.Println("stat: ", stat)
 		//	assetsStats = append(assetsStats, stat)
 		//	gstat.totalResponseSize += stat.responseSize
 		//got an asset, fetch next if exist

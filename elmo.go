@@ -58,7 +58,7 @@ var (
 
 //cli flags
 var (
-	mainUrl                   = flag.String("url", "", "The url to get.")
+	mainUrl               = flag.String("url", "", "The url to get.")
 	version               = flag.Bool("version", false, "Print version information.")
 	verbose               = flag.Bool("verbose", false, "Print more informations.")
 	parallelFetch         = flag.Int("parallel", 8, "Number of parallel fetch to launch. 0 means unlimited.")
@@ -155,11 +155,9 @@ func extractAssets(body *[]byte, mainRequest *http.Request) []string {
 	for {
 		tt := z.Next()
 
-
 		switch tt {
 		case html.ErrorToken:
 			// End of the document, we're done
-			//fmt.Printf("   - end of doc\n")
 			return assets
 		case html.SelfClosingTagToken, html.StartTagToken:
 			t := z.Token()
@@ -199,7 +197,6 @@ func extractAssets(body *[]byte, mainRequest *http.Request) []string {
 
 //Fetch an asset and get downloadStatistic
 func fetchAsset(assetUrl string, client *http.Client, chStat chan downloadStatistic, chFinished chan bool) {
-	fmt.Println(assetUrl)
 
 	defer func() {
 		// Notify that we're done after this function
