@@ -34,12 +34,13 @@ func TestFetchMainUrl(t *testing.T) {
 		<img src="http://test.com/1.png"/>
 		<img src="http://test.com/É.png"/>
 		<img src="http://test.com/3.png">
+		<div class="full" style="background-image: url('http://test.com/3.png');"></div>
 		<script type="text/javascript" src="http://test.com/1.js">
 	</body>`
 
 	tests := []struct {
 		assetCount, responseSize int
-	}{{5, 385}}
+	}{{6, 468}}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.String() {
