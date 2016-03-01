@@ -79,18 +79,18 @@ func TestFetchAsset(t *testing.T) {
 		responseSize int
 	}{
 		{"/1.png", 1},
-		{"/É.png", 2},
+		{"/2.png", 2},
 		{"/3.png", 3},
 	}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.String() {
 		case "/1.png":
-			fmt.Fprintln(w, "0")
-		case "/É.png":
-			fmt.Fprintln(w, "0000")
+			fmt.Fprint(w, "\x00")
+		case "/2.png":
+			fmt.Fprint(w, "\x00\x00")
 		case "/3.png":
-			fmt.Fprintln(w, "00000000")
+			fmt.Fprint(w, "\x00\x00\x00")
 		}
 	}))
 	defer ts.Close()
@@ -105,6 +105,7 @@ func TestFetchAsset(t *testing.T) {
 
 	//Set an http client with this transport
 	client := &http.Client{Transport: transport}
+	//*verbose = true
 
 	// Channels
 	chUrls := make(chan downloadStatistic)
@@ -123,10 +124,20 @@ func TestFetchAsset(t *testing.T) {
 	for c := 0; c < len(tests); {
 		select {
 		case stat := <-chUrls:
-			fmt.Println(tests[0])
-			fmt.Println("stat: ", stat)
-		//	assetsStats = append(assetsStats, stat)
-		//	gstat.totalResponseSize += stat.responseSize
+			if *verbose {
+				fmt.Println("stat", stat)
+			}
+
+			//check asset stats
+			for _, tt := range tests {
+				if ts.URL+tt.assetUrl != stat.url {
+					continue
+				}
+				if stat.responseSize != tt.responseSize {
+					t.Errorf("responseSize of ressource %s should be %d bytes but is %d bytes.", tt.assetUrl, tt.responseSize, stat.responseSize)
+				}
+			}
+
 		//got an asset, fetch next if exist
 		case <-chFinished:
 			c++
@@ -134,10 +145,6 @@ func TestFetchAsset(t *testing.T) {
 	}
 
 	close(chUrls)
-
-	//if mainUrlStat.responseSize != tt.responseSize {
-	//	t.Errorf("mainUrlStat.responseSize is not returned %d but %d", tt.responseSize, mainUrlStat.responseSize)
-	//}
 
 }
 
