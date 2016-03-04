@@ -64,7 +64,11 @@ func TestFetchMainUrl(t *testing.T) {
 	client := &http.Client{Transport: transport}
 
 	for _, tt := range tests {
-		assets, mainUrlStat := fetchMainUrl(&ts.URL, client)
+		assets, mainUrlStat, err := fetchMainUrl(&ts.URL, client)
+
+		if err != nil {
+			t.Errorf("%v", err)
+		}
 
 		if len(assets) != tt.assetCount {
 			t.Errorf("fetchMainUrl do not returned %d elements but %d", tt.assetCount, len(assets))
