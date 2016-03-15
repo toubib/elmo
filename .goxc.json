@@ -1,0 +1,18 @@
+{
+	"ArtifactsDest": "build",
+	"PackageVersion": "0.1-snapshot",
+	"TaskSettings": {
+		"pkg-build": {
+			"metadata": {
+				"description": "Fetch a webpage and send stats to influxdb.",
+				"long-description": "",
+				"maintainer": "Vincent Reydet",
+				"maintainer-email": "toubib.lag@gmail.com"
+			},
+			"metadata-deb": {
+				"Homepage": "https://github.com/Toubib/elmo"
+			}
+		}
+	},
+	"ConfigVersion": "0.9"
+}
