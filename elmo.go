@@ -26,6 +26,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -42,6 +43,13 @@ type globalStatistic struct {
 	totalResponseTime time.Duration
 	totalResponseSize int
 }
+
+const (
+	NAGIOS_OK      = 0
+	NAGIOS_WARNING = 1
+	NAGIOS_ERROR   = 2
+	NAGIOS_UNKNOWN = 3
+)
 
 var (
 	VERSION    = "0.1-dev"
@@ -64,6 +72,7 @@ var (
 	verbose               = flag.Bool("verbose", false, "Print more informations.")
 	parallelFetch         = flag.Int("parallel", 8, "Number of parallel fetch to launch. 0 means unlimited.")
 	connectTimeout        = flag.Int("connect-timeout", 1000, "Connect timeout in ms.")
+	nagios                = flag.Bool("nagios", false, "Nagios compatible output.")
 	requestTimeout        = flag.Int("request-timeout", 10000, "Request timeout in ms.")
 	responseHeaderTimeout = flag.Int("response-header-timeout", 5000, "Response header timeout in ms.")
 	useInflux             = flag.Bool("use-influx", false, "Send data to influxdb.")
@@ -125,7 +134,7 @@ func getLink(t *html.Token) (ok bool, link string) {
 }
 
 // Extract all http** links from a given webpage
-func fetchMainUrl(mainUrl *string, client *http.Client) ([]string, downloadStatistic) {
+func fetchMainUrl(mainUrl *string, client *http.Client) ([]string, downloadStatistic, error) {
 
 	//List of urls found
 	var assets []string
@@ -141,8 +150,7 @@ func fetchMainUrl(mainUrl *string, client *http.Client) ([]string, downloadStati
 	resp, err := client.Do(req)
 
 	if err != nil {
-		fmt.Println(red("ERROR"), err)
-		return assets, stat
+		return assets, stat, err
 	}
 
 	//Set stats
@@ -153,8 +161,7 @@ func fetchMainUrl(mainUrl *string, client *http.Client) ([]string, downloadStati
 	body, err := ioutil.ReadAll(resp.Body)
 
 	if err != nil {
-		fmt.Println("ERROR: Failed to read body for input url \"" + *mainUrl + "\"")
-		return assets, stat
+		return assets, stat, err
 	}
 
 	//Set response size stat
@@ -168,7 +175,7 @@ func fetchMainUrl(mainUrl *string, client *http.Client) ([]string, downloadStati
 	//extract assets from html
 	assets = extractAssets(&body, req)
 
-	return assets, stat
+	return assets, stat, nil
 }
 
 //Get a html body and extract all assets links
@@ -246,8 +253,11 @@ func fetchAsset(assetUrl string, client *http.Client, chStat chan downloadStatis
 
 	resp, err := client.Do(req)
 
+	//handle error
 	if err != nil {
-		fmt.Println(red("ERROR - "), err)
+		if !*nagios {
+			fmt.Println(red("Error:"), stat.url, err)
+		}
 		return
 	}
 
@@ -334,11 +344,14 @@ func checkIfDomainAllowed(host *string) bool {
 
 func main() {
 	//urls and global stats
-	var assets []string
-	var assetsStats []downloadStatistic
-	var mainUrlStat downloadStatistic
-	var gstat globalStatistic
-	var currentUrlIndex int
+	var (
+		assets          []string
+		assetsStats     []downloadStatistic
+		mainUrlStat     downloadStatistic
+		gstat           globalStatistic
+		currentUrlIndex int
+		err             error
+	)
 
 	flag.Parse()
 
@@ -367,7 +380,20 @@ func main() {
 	t0 := time.Now()
 
 	//Fetch the main url and get inner links
-	assets, mainUrlStat = fetchMainUrl(mainUrl, client)
+	assets, mainUrlStat, err = fetchMainUrl(mainUrl, client)
+
+	//handle main url error
+	if err != nil {
+		if *nagios {
+			fmt.Println(err)
+			os.Exit(NAGIOS_ERROR)
+		} else {
+			fmt.Println(red("Fatal:"), err)
+			os.Exit(1)
+		}
+	}
+
+	//add main url response time
 	gstat.totalResponseSize += mainUrlStat.responseSize
 
 	//Fetch the firsts inner links
@@ -410,6 +436,11 @@ func main() {
 	}
 
 	// We're done! Print the results...
-	fmt.Printf("Total time: %v.\n", cyan(gstat.totalResponseTime))
-	fmt.Printf("Total size: %v%s.\n", white(gstat.totalResponseSize/1024), white("kb"))
+	if *nagios {
+		fmt.Printf("Downloaded %vkb in %d/%d files in %v.\n", gstat.totalResponseSize/1024, len(assetsStats), len(assets), gstat.totalResponseTime)
+	} else {
+		fmt.Printf("Downloaded assets: %d/%d.\n", len(assetsStats), len(assets))
+		fmt.Printf("Total time: %v.\n", cyan(gstat.totalResponseTime))
+		fmt.Printf("Total size: %v%s.\n", white(gstat.totalResponseSize/1024), white("kb"))
+	}
 }
