@@ -67,14 +67,18 @@ var (
 
 //cli flags
 var (
-	mainUrl               = flag.String("url", "", "The url to get.")
-	version               = flag.Bool("version", false, "Print version information.")
-	verbose               = flag.Bool("verbose", false, "Print more informations.")
-	parallelFetch         = flag.Int("parallel", 8, "Number of parallel fetch to launch. 0 means unlimited.")
-	connectTimeout        = flag.Int("connect-timeout", 1000, "Connect timeout in ms.")
-	nagios                = flag.Bool("nagios", false, "Nagios compatible output.")
+	mainUrl        = flag.String("url", "", "The url to get.")
+	version        = flag.Bool("version", false, "Print version information.")
+	verbose        = flag.Bool("verbose", false, "Print more informations.")
+	parallelFetch  = flag.Int("parallel", 8, "Number of parallel fetch to launch. 0 means unlimited.")
+	connectTimeout = flag.Int("connect-timeout", 1000, "Connect timeout in ms.")
+
+	useNagios          = flag.Bool("use-nagios", false, "Nagios compatible output.")
+	nagiosWarningTime  = flag.Int("nagios-warning", 5000, "Nagios warning time in ms.")
+	nagiosCriticalTime = flag.Int("nagios-critical", 10000, "Nagios critical time in ms.")
+
 	requestTimeout        = flag.Int("request-timeout", 10000, "Request timeout in ms.")
-	responseHeaderTimeout = flag.Int("response-header-timeout", 5000, "Response header timeout in ms.")
+	responseHeaderTimeout = flag.Int("response-header-timeout", 0, "Response header timeout in ms.")
 	useInflux             = flag.Bool("use-influx", false, "Send data to influxdb.")
 	influxUrl             = flag.String("influx-url", "http://localhost:8086", "The influx database access url.")
 	influxDatabase        = flag.String("influx-database", "elmo", "The influx database name.")
@@ -255,7 +259,7 @@ func fetchAsset(assetUrl string, client *http.Client, chStat chan downloadStatis
 
 	//handle error
 	if err != nil {
-		if !*nagios {
+		if !*useNagios {
 			fmt.Println(red("Error:"), stat.url, err)
 		}
 		return
@@ -364,6 +368,10 @@ func main() {
 		fmt.Printf("%v\nBuild: %v\n", VERSION, BUILD_DATE)
 		return
 	}
+	//set global timeout if nagios timeout is set
+	if *useNagios {
+		*requestTimeout = *nagiosCriticalTime
+	}
 
 	//Set a transport with timeouts
 	transport := &httpclient.Transport{
@@ -384,7 +392,7 @@ func main() {
 
 	//handle main url error
 	if err != nil {
-		if *nagios {
+		if *useNagios {
 			fmt.Println(err)
 			os.Exit(NAGIOS_ERROR)
 		} else {
@@ -436,8 +444,21 @@ func main() {
 	}
 
 	// We're done! Print the results...
-	if *nagios {
-		fmt.Printf("Downloaded %vkb in %d/%d files in %v.\n", gstat.totalResponseSize/1024, len(assetsStats), len(assets), gstat.totalResponseTime)
+	if *useNagios {
+		fmt.Printf("Downloaded %vKB in %d/%d files in %v.|size=%vKB time=%v;%v;%v;0;%v\n",
+			gstat.totalResponseSize/1024, len(assetsStats), len(assets), gstat.totalResponseTime,
+			gstat.totalResponseSize/1024, gstat.totalResponseTime, *nagiosWarningTime, *nagiosCriticalTime, *requestTimeout,
+		)
+
+		//nagios exit
+		if gstat.totalResponseTime >= time.Duration(*nagiosCriticalTime)*time.Millisecond {
+			os.Exit(NAGIOS_ERROR)
+		} else if gstat.totalResponseTime >= time.Duration(*nagiosWarningTime)*time.Millisecond {
+			os.Exit(NAGIOS_WARNING)
+		} else {
+			os.Exit(NAGIOS_OK)
+		}
+
 	} else {
 		fmt.Printf("Downloaded assets: %d/%d.\n", len(assetsStats), len(assets))
 		fmt.Printf("Total time: %v.\n", cyan(gstat.totalResponseTime))
