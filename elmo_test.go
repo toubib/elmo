@@ -13,7 +13,7 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>. 1
 */
 
-package main
+package elmo
 
 import (
 	"fmt"

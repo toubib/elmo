@@ -13,11 +13,10 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>. 1
 */
 
-package main
+package elmo
 
 import (
 	"bytes"
-	"flag"
 	"fmt"
 	"github.com/fatih/color"
 	"github.com/influxdata/influxdb/client/v2"
@@ -32,6 +31,10 @@ import (
 	"time"
 )
 
+type Options struct {
+	verbose bool
+}
+
 type downloadStatistic struct {
 	url          string
 	responseTime time.Duration
@@ -44,18 +47,6 @@ type globalStatistic struct {
 	totalResponseSize int
 }
 
-const (
-	NAGIOS_OK      = 0
-	NAGIOS_WARNING = 1
-	NAGIOS_ERROR   = 2
-	NAGIOS_UNKNOWN = 3
-)
-
-var (
-	VERSION    = "0.1-dev"
-	BUILD_DATE = ""
-)
-
 //colors !
 var (
 	yellow = color.New(color.FgYellow).SprintFunc()
@@ -63,26 +54,6 @@ var (
 	white  = color.New(color.FgWhite).SprintFunc()
 	red    = color.New(color.FgRed, color.Bold).SprintFunc()
 	green  = color.New(color.FgGreen, color.Bold).SprintFunc()
-)
-
-//cli flags
-var (
-	mainUrl        = flag.String("url", "", "The url to get.")
-	version        = flag.Bool("version", false, "Print version information.")
-	verbose        = flag.Bool("verbose", false, "Print more informations.")
-	parallelFetch  = flag.Int("parallel", 8, "Number of parallel fetch to launch. 0 means unlimited.")
-	connectTimeout = flag.Int("connect-timeout", 1000, "Connect timeout in ms.")
-
-	useNagios          = flag.Bool("use-nagios", false, "Nagios compatible output.")
-	nagiosWarningTime  = flag.Int("nagios-warning", 5000, "Nagios warning time in ms.")
-	nagiosCriticalTime = flag.Int("nagios-critical", 10000, "Nagios critical time in ms.")
-
-	requestTimeout        = flag.Int("request-timeout", 10000, "Request timeout in ms.")
-	responseHeaderTimeout = flag.Int("response-header-timeout", 0, "Response header timeout in ms.")
-	useInflux             = flag.Bool("use-influx", false, "Send data to influxdb.")
-	influxUrl             = flag.String("influx-url", "http://localhost:8086", "The influx database access url.")
-	influxDatabase        = flag.String("influx-database", "elmo", "The influx database name.")
-	assetsAllowedDomains  = flag.String("assets-allowed-domains", "", "List of allowed assets domains to fetch from, comma separated.")
 )
 
 var globalStartTime = time.Now()
@@ -138,7 +109,7 @@ func getLink(t *html.Token) (ok bool, link string) {
 }
 
 // Extract all http** links from a given webpage
-func fetchMainUrl(mainUrl *string, client *http.Client) ([]string, downloadStatistic, error) {
+func fetchMainUrl(mainUrl *string, client *http.Client, verbose *bool) ([]string, downloadStatistic, error) {
 
 	//List of urls found
 	var assets []string
@@ -235,7 +206,7 @@ func extractAssets(body *[]byte, mainRequest *http.Request) []string {
 }
 
 //Fetch an asset and get downloadStatistic
-func fetchAsset(assetUrl string, client *http.Client, chStat chan downloadStatistic, chFinished chan bool) {
+func fetchAsset(assetUrl string, client *http.Client, chStat chan downloadStatistic, chFinished chan bool, verbose *bool) {
 
 	defer func() {
 		// Notify that we're done after this function
@@ -346,28 +317,21 @@ func checkIfDomainAllowed(host *string) bool {
 	return false
 }
 
-func main() {
+func run(o Options) globalStatistic {
 	//urls and global stats
 	var (
-		assets          []string
-		assetsStats     []downloadStatistic
-		mainUrlStat     downloadStatistic
-		gstat           globalStatistic
+		assets      []string
+		assetsStats []downloadStatistic
+		mainUrlStat downloadStatistic
+		//gstat           globalStatistic
 		currentUrlIndex int
 		err             error
 	)
-
-	flag.Parse()
 
 	// Channels
 	chUrls := make(chan downloadStatistic)
 	chFinished := make(chan bool)
 
-	// Manage flags stuff
-	if *version {
-		fmt.Printf("%v\nBuild: %v\n", VERSION, BUILD_DATE)
-		return
-	}
 	//set global timeout if nagios timeout is set
 	if *useNagios {
 		*requestTimeout = *nagiosCriticalTime
@@ -388,7 +352,7 @@ func main() {
 	t0 := time.Now()
 
 	//Fetch the main url and get inner links
-	assets, mainUrlStat, err = fetchMainUrl(mainUrl, client)
+	assets, mainUrlStat, err = fetchMainUrl(mainUrl, client, &o.verbose)
 
 	//handle main url error
 	if err != nil {
@@ -408,7 +372,7 @@ func main() {
 	for _, assetUrl := range assets {
 		//fmt.Printf("%d/%d: call %s\n",currentUrlIndex, len(assets)-1, assetUrl)
 
-		go fetchAsset(assetUrl, client, chUrls, chFinished)
+		go fetchAsset(assetUrl, client, chUrls, chFinished, &o.verbose)
 
 		//limit calls count to max_concurrent_call
 		currentUrlIndex++
@@ -426,7 +390,7 @@ func main() {
 		//got an asset, fetch next if exist
 		case <-chFinished:
 			if currentUrlIndex < len(assets) {
-				go fetchAsset(assets[currentUrlIndex], client, chUrls, chFinished)
+				go fetchAsset(assets[currentUrlIndex], client, chUrls, chFinished, &o.verbose)
 			}
 			c++
 			currentUrlIndex++
@@ -438,30 +402,5 @@ func main() {
 	//Set timer for global time
 	gstat.totalResponseTime += time.Now().Sub(t0)
 
-	// send data to influxdb
-	if *useInflux {
-		sendstatsToInflux(&assetsStats)
-	}
-
-	// We're done! Print the results...
-	if *useNagios {
-		fmt.Printf("Downloaded %vKB in %d/%d files in %v.|size=%vKB time=%v;%v;%v;0;%v\n",
-			gstat.totalResponseSize/1024, len(assetsStats), len(assets), gstat.totalResponseTime,
-			gstat.totalResponseSize/1024, gstat.totalResponseTime, *nagiosWarningTime, *nagiosCriticalTime, *requestTimeout,
-		)
-
-		//nagios exit
-		if gstat.totalResponseTime >= time.Duration(*nagiosCriticalTime)*time.Millisecond {
-			os.Exit(NAGIOS_ERROR)
-		} else if gstat.totalResponseTime >= time.Duration(*nagiosWarningTime)*time.Millisecond {
-			os.Exit(NAGIOS_WARNING)
-		} else {
-			os.Exit(NAGIOS_OK)
-		}
-
-	} else {
-		fmt.Printf("Downloaded assets: %d/%d.\n", len(assetsStats), len(assets))
-		fmt.Printf("Total time: %v.\n", cyan(gstat.totalResponseTime))
-		fmt.Printf("Total size: %v%s.\n", white(gstat.totalResponseSize/1024), white("kb"))
-	}
+	return gstat
 }
