@@ -27,3 +27,5 @@ elmo
 
 #vim tmp files
 .*.swp
+
+helper.txt
