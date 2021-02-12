@@ -37,6 +37,9 @@ jobs:
 
     - name: Build
       run: go build -v ./...
+    
+    - name: Debug
+      run: ls -lh
       
     - name: Archive production artifacts
       uses: actions/upload-artifact@v2
