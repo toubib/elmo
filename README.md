@@ -1,4 +1,4 @@
-# elmo ![Build status](https://travis-ci.org/Toubib/elmo.svg)
+# elmo ![Go](https://github.com/toubib/elmo/workflows/Go/badge.svg)
 
 Elmo let you fetch a web page with its assets and send download time statistics to influxdb.
 
