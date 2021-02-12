@@ -41,10 +41,11 @@ jobs:
     - name: Debug
       run: |
         ls -lh
-        ls -lh ${{ github.workspace }}/
+        ls -lh ${{ github.workspace }}/*
+        ls -lh ${{ env.GOPATH }}/src/elmo
       
     - name: Archive production artifacts
       uses: actions/upload-artifact@v2
       with:
         name: elmo
-        path: ${{ github.workspace }}/elmo
+        path: ${{ env.GOPATH }}/src/elmo/elmo
