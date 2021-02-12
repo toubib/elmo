@@ -8,7 +8,7 @@ on:
 
 jobs:
 
-  build:
+  test_and_build:
     runs-on: ubuntu-latest
     env:
       GOPATH: ${{ github.workspace }}
@@ -32,15 +32,14 @@ jobs:
     - name: get dependencies
       run: go get -v ./...
 
-    - name: Build
-      run: go build -v ./...
-
     - name: Test
       run: go test -v ./...
 
+    - name: Build
+      run: go build -v ./...
+      
     - name: Archive production artifacts
       uses: actions/upload-artifact@v2
       with:
-        name: binary
-        path: |
-          elmo
+        name: elmo
+        path: elmo
