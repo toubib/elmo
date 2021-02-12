@@ -10,8 +10,19 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
+    env:
+      GOPATH: ${{ github.workspace }}
+      GOBIN: ${{ github.workspace }}/bin
+      
+    defaults:
+      run:
+        working-directory: ${{ env.GOPATH }}/src/elmo
+    
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 1
+        path: ${{ env.GOPATH }}/src/elmo
 
     - name: Set up Go
       uses: actions/setup-go@v2
