@@ -390,6 +390,7 @@ func main() {
 
 	//Fetch the main url and get inner links
 	assets, mainUrlStat, err = fetchMainUrl(mainUrl, client)
+	assetsStats = append(assetsStats, mainUrlStat)
 
 	//handle main url error
 	if err != nil {
