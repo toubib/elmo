@@ -22,7 +22,7 @@ import (
 	"github.com/fatih/color"
 	_ "github.com/influxdata/influxdb1-client" // this is important because of the bug in go mod
 	client "github.com/influxdata/influxdb1-client/v2"
-	"github.com/mreiferson/go-httpclient"
+	//"github.com/mreiferson/go-httpclient"
 	"golang.org/x/net/html"
 	"io/ioutil"
 	"net/http"
@@ -31,6 +31,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+    "context"
+    "net"
 )
 
 type downloadStatistic struct {
@@ -62,6 +64,7 @@ var (
 	yellow = color.New(color.FgYellow).SprintFunc()
 	cyan   = color.New(color.FgCyan).SprintFunc()
 	white  = color.New(color.FgWhite).SprintFunc()
+	bold_white  = color.New(color.FgWhite, color.Bold).SprintFunc()
 	red    = color.New(color.FgRed, color.Bold).SprintFunc()
 	green  = color.New(color.FgGreen, color.Bold).SprintFunc()
 )
@@ -71,14 +74,17 @@ var (
 	mainUrl        = flag.String("url", "", "The url to get.")
 	version        = flag.Bool("version", false, "Print version information.")
 	verbose        = flag.Bool("verbose", false, "Print more informations.")
+	debug        = flag.Bool("debug", false, "Print debug.")
 	parallelFetch  = flag.Int("parallel", 8, "Number of parallel fetch to launch. 0 means unlimited.")
 	connectTimeout = flag.Int("connect-timeout", 1000, "Connect timeout in ms.")
+    tlsHandshakeTimeout = flag.Int("tls-timeout", 1000, "TLS handshake timeout in ms.")
 
+	resolve			= flag.String("resolve", "", "host:port:addr> Resolve the host+port to this address")
 	useNagios          = flag.Bool("use-nagios", false, "Nagios compatible output.")
 	nagiosWarningTime  = flag.Int("nagios-warning", 5000, "Nagios warning time in ms.")
 	nagiosCriticalTime = flag.Int("nagios-critical", 10000, "Nagios critical time in ms.")
 
-	requestTimeout        = flag.Int("request-timeout", 10000, "Request timeout in ms.")
+	timeout        = flag.Int("timeout", 10000, "Global request timeout in ms.")
 	responseHeaderTimeout = flag.Int("response-header-timeout", 0, "Response header timeout in ms.")
 	useInflux             = flag.Bool("use-influx", false, "Send data to influxdb.")
 	influxUrl             = flag.String("influx-url", "http://localhost:8086", "The influx database access url.")
@@ -371,19 +377,55 @@ func main() {
 	}
 	//set global timeout if nagios timeout is set
 	if *useNagios {
-		*requestTimeout = *nagiosCriticalTime
+		*timeout = *nagiosCriticalTime
 	}
 
-	//Set a transport with timeouts
-	transport := &httpclient.Transport{
-		ConnectTimeout:        time.Duration(*connectTimeout) * time.Millisecond,
-		RequestTimeout:        time.Duration(*requestTimeout) * time.Millisecond,
-		ResponseHeaderTimeout: time.Duration(*responseHeaderTimeout) * time.Millisecond,
+	//set timeouts
+	transport := &http.Transport{
+
+		DialContext: (&net.Dialer{
+			Timeout:   time.Duration(*connectTimeout) * time.Millisecond,
+		}).DialContext,
+
+        TLSHandshakeTimeout:   time.Duration(*tlsHandshakeTimeout) * time.Millisecond,
+        ResponseHeaderTimeout: time.Duration(*responseHeaderTimeout) * time.Millisecond,
+    }
+
+    dialer := &net.Dialer{
+        Timeout:   time.Duration(*connectTimeout) * time.Millisecond,
+//        KeepAlive: 30 * time.Second,
+    }
+
+	var domain_resolve []string = nil
+
+	if (*resolve != "") {
+		domain_resolve = strings.Split(*resolve, ":")
+		if (len(domain_resolve) != 3) {
+			fmt.Printf("bad argument -resolve\n")
+			os.Exit(NAGIOS_UNKNOWN)
+		}
+				if *debug {
+					fmt.Printf("debug: domain_resolve set to %v\n", domain_resolve)
+				}
 	}
-	defer transport.Close()
+
+	transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		if (*resolve != "") {
+			if addr == domain_resolve[0]+":"+domain_resolve[1] {
+				if *debug {
+					fmt.Printf(bold_white("debug: rewrite %s to %s\n"), addr, domain_resolve[2]+":"+domain_resolve[1])
+				}
+			    addr = domain_resolve[2]+":"+domain_resolve[1]
+			}
+		}
+        return dialer.DialContext(ctx, network, addr)
+    }
 
 	//Set an http client with this transport
-	client := &http.Client{Transport: transport}
+	client := &http.Client{
+		Timeout: time.Duration(*timeout) * time.Millisecond,
+		Transport: transport,
+	}
 
 	//Set timer for global time
 	t0 := time.Now()
@@ -449,7 +491,7 @@ func main() {
 	if *useNagios {
 		fmt.Printf("Downloaded %vKB in %d/%d files in %v.|size=%vKB time=%v;%v;%v;0;%v\n",
 			gstat.totalResponseSize/1024, len(assetsStats), len(assets), gstat.totalResponseTime,
-			gstat.totalResponseSize/1024, gstat.totalResponseTime, *nagiosWarningTime, *nagiosCriticalTime, *requestTimeout,
+			gstat.totalResponseSize/1024, gstat.totalResponseTime, *nagiosWarningTime, *nagiosCriticalTime, *timeout,
 		)
 
 		//nagios exit
