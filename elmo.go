@@ -22,7 +22,6 @@ import (
 	"github.com/fatih/color"
 	_ "github.com/influxdata/influxdb1-client" // this is important because of the bug in go mod
 	client "github.com/influxdata/influxdb1-client/v2"
-	//"github.com/mreiferson/go-httpclient"
 	"golang.org/x/net/html"
 	"io/ioutil"
 	"net/http"
