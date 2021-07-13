@@ -54,8 +54,7 @@ const (
 )
 
 var (
-	VERSION    = "0.1-dev"
-	BUILD_DATE = ""
+	VERSION    = "0.2"
 )
 
 //colors !
@@ -371,7 +370,7 @@ func main() {
 
 	// Manage flags stuff
 	if *version {
-		fmt.Printf("%v\nBuild: %v\n", VERSION, BUILD_DATE)
+		fmt.Printf("%v\n", VERSION)
 		return
 	}
 	//set global timeout if nagios timeout is set
