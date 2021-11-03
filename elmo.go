@@ -58,7 +58,7 @@ var (
 
 //colors !
 var (
-	yellow     = color.New(color.FgYellow).SprintFunc()
+	//yellow     = color.New(color.FgYellow).SprintFunc()
 	cyan       = color.New(color.FgCyan).SprintFunc()
 	white      = color.New(color.FgWhite).SprintFunc()
 	bold_white = color.New(color.FgWhite, color.Bold).SprintFunc()
@@ -305,9 +305,15 @@ func fetchAsset(assetUrl string, client *http.Client, headers map[string]string,
 	b := resp.Body
 	defer b.Close() // close Body when the function returns
 	body, err := ioutil.ReadAll(resp.Body)
-
-	//Set response size stat
-	stat.responseSize = len(body)
+	if err != nil {
+		if !*useNagios {
+			fmt.Println(red("Error:"), stat.url, err)
+		}
+		stat.responseSize = 0
+	} else {
+		//Set response size stat
+		stat.responseSize = len(body)
+	}
 
 	//Print download
 	if *verbose {
