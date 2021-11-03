@@ -69,6 +69,7 @@ var (
 //cli flags
 var (
 	mainUrl             = flag.String("url", "", "The url to get.")
+	userAgent           = flag.String("user-agent", "", "Change the user-agent")
 	version             = flag.Bool("version", false, "Print version information.")
 	verbose             = flag.Bool("verbose", false, "Print more informations.")
 	debug               = flag.Bool("debug", false, "Print debug.")
@@ -142,7 +143,7 @@ func getLink(t *html.Token) (ok bool, link string) {
 }
 
 // Extract all http** links from a given webpage
-func fetchMainUrl(mainUrl *string, client *http.Client) ([]string, downloadStatistic, error) {
+func fetchMainUrl(mainUrl *string, client *http.Client, headers map[string]string) ([]string, downloadStatistic, error) {
 
 	//List of urls found
 	var assets []string
@@ -155,7 +156,29 @@ func fetchMainUrl(mainUrl *string, client *http.Client) ([]string, downloadStati
 
 	//launch the query
 	req, _ := http.NewRequest("GET", *mainUrl, nil)
+
+	//set headers
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+
+	if *debug {
+		fmt.Printf("debug request: %v\n", req)
+	}
+
+	if *debug || *verbose {
+
+		client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+			fmt.Printf("Redirect to %v\n", req.URL)
+			return nil
+		}
+	}
+
 	resp, err := client.Do(req)
+
+	if *debug {
+		fmt.Printf("debug response: %v\n", resp)
+	}
 
 	if err != nil {
 		return assets, stat, err
@@ -239,7 +262,7 @@ func extractAssets(body *[]byte, mainRequest *http.Request) []string {
 }
 
 //Fetch an asset and get downloadStatistic
-func fetchAsset(assetUrl string, client *http.Client, chStat chan downloadStatistic, chFinished chan bool) {
+func fetchAsset(assetUrl string, client *http.Client, headers map[string]string, chStat chan downloadStatistic, chFinished chan bool) {
 
 	defer func() {
 		// Notify that we're done after this function
@@ -257,6 +280,11 @@ func fetchAsset(assetUrl string, client *http.Client, chStat chan downloadStatis
 
 	if checkIfDomainAllowed(&req.URL.Host) == false {
 		return
+	}
+
+	//set headers
+	for k, v := range headers {
+		req.Header.Set(k, v)
 	}
 
 	resp, err := client.Do(req)
@@ -334,6 +362,12 @@ func main() {
 		*timeout = *nagiosCriticalTime
 	}
 
+	//Set headers
+	headers := make(map[string]string)
+	if *userAgent != "" {
+		headers["User-Agent"] = *userAgent
+	}
+
 	//set timeouts
 	transport := &http.Transport{
 
@@ -385,7 +419,7 @@ func main() {
 	t0 := time.Now()
 
 	//Fetch the main url and get inner links
-	assets, mainUrlStat, err = fetchMainUrl(mainUrl, client)
+	assets, mainUrlStat, err = fetchMainUrl(mainUrl, client, headers)
 	assetsStats = append(assetsStats, mainUrlStat)
 
 	//handle main url error
@@ -406,7 +440,7 @@ func main() {
 	for _, assetUrl := range assets {
 		//fmt.Printf("%d/%d: call %s\n",currentUrlIndex, len(assets)-1, assetUrl)
 
-		go fetchAsset(assetUrl, client, chUrls, chFinished)
+		go fetchAsset(assetUrl, client, headers, chUrls, chFinished)
 
 		//limit calls count to max_concurrent_call
 		currentUrlIndex++
@@ -424,7 +458,7 @@ func main() {
 		//got an asset, fetch next if exist
 		case <-chFinished:
 			if currentUrlIndex < len(assets) {
-				go fetchAsset(assets[currentUrlIndex], client, chUrls, chFinished)
+				go fetchAsset(assets[currentUrlIndex], client, headers, chUrls, chFinished)
 			}
 			c++
 			currentUrlIndex++

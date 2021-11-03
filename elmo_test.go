@@ -17,9 +17,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/mreiferson/go-httpclient"
 	"net/http"
 	"net/http/httptest"
+
+	"github.com/mreiferson/go-httpclient"
+
 	//	"net/url"
 	"testing"
 	"time"
@@ -64,7 +66,7 @@ func TestFetchMainUrl(t *testing.T) {
 	client := &http.Client{Transport: transport}
 
 	for _, tt := range tests {
-		assets, mainUrlStat, err := fetchMainUrl(&ts.URL, client)
+		assets, mainUrlStat, err := fetchMainUrl(&ts.URL, client, make(map[string]string))
 
 		if err != nil {
 			t.Errorf("%v", err)
@@ -124,7 +126,7 @@ func TestFetchAsset(t *testing.T) {
 		u := ts.URL + tt.assetUrl
 
 		// fetch asset
-		go fetchAsset(u, client, chUrls, chFinished)
+		go fetchAsset(u, client, make(map[string]string), chUrls, chFinished)
 	}
 
 	// Subscribe to channels to wait for go routine

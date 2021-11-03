@@ -1,0 +1,2 @@
+goxc -arch=amd64 -bc=linux -os=linux
+package_cloud push toubiblag/elmo build/0.1-snapshot/elmo_0.1-snapshot_amd64.deb
