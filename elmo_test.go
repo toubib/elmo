@@ -66,7 +66,7 @@ func TestFetchMainUrl(t *testing.T) {
 	client := &http.Client{Transport: transport}
 
 	for _, tt := range tests {
-		assets, mainUrlStat, err := fetchMainUrl(&ts.URL, client, make(map[string]string))
+		assets, mainUrlStat, err := fetchMainUrl(&ts.URL, client, make(map[string]string), nil)
 
 		if err != nil {
 			t.Errorf("%v", err)

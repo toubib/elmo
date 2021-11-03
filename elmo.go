@@ -18,6 +18,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -70,6 +71,7 @@ var (
 var (
 	mainUrl             = flag.String("url", "", "The url to get.")
 	userAgent           = flag.String("user-agent", "", "Change the user-agent")
+	keyword             = flag.String("keyword", "", "Check for keyword in reponse")
 	version             = flag.Bool("version", false, "Print version information.")
 	verbose             = flag.Bool("verbose", false, "Print more informations.")
 	debug               = flag.Bool("debug", false, "Print debug.")
@@ -143,7 +145,7 @@ func getLink(t *html.Token) (ok bool, link string) {
 }
 
 // Extract all http** links from a given webpage
-func fetchMainUrl(mainUrl *string, client *http.Client, headers map[string]string) ([]string, downloadStatistic, error) {
+func fetchMainUrl(mainUrl *string, client *http.Client, headers map[string]string, keyword *string) ([]string, downloadStatistic, error) {
 
 	//List of urls found
 	var assets []string
@@ -193,6 +195,11 @@ func fetchMainUrl(mainUrl *string, client *http.Client, headers map[string]strin
 
 	if err != nil {
 		return assets, stat, err
+	}
+
+	//Check for keyword
+	if keyword != nil && *keyword != "" && !bytes.Contains(body, []byte(*keyword)) {
+		return assets, stat, errors.New("String " + *keyword + " not found.")
 	}
 
 	//Set response size stat
@@ -425,7 +432,7 @@ func main() {
 	t0 := time.Now()
 
 	//Fetch the main url and get inner links
-	assets, mainUrlStat, err = fetchMainUrl(mainUrl, client, headers)
+	assets, mainUrlStat, err = fetchMainUrl(mainUrl, client, headers, keyword)
 	assetsStats = append(assetsStats, mainUrlStat)
 
 	//handle main url error
