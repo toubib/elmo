@@ -185,7 +185,7 @@ func fetchMainUrl(mainUrl *string, client *http.Client, headers map[string]strin
 	}
 
 	//Set stats
-	stat.responseTime = time.Now().Sub(t0)
+	stat.responseTime = time.Since(t0)
 	stat.statusCode = resp.StatusCode
 
 	//get the body size
@@ -200,7 +200,7 @@ func fetchMainUrl(mainUrl *string, client *http.Client, headers map[string]strin
 
 	//Print download
 	if *verbose {
-		fmt.Printf("%s\t%s %s %v %v%s\n", time.Now().Sub(globalStartTime), green(stat.statusCode), stat.url, cyan(stat.responseTime), white(stat.responseSize), white("b"))
+		fmt.Printf("%s\t%s %s %v %v%s\n", time.Since(globalStartTime), green(stat.statusCode), stat.url, cyan(stat.responseTime), white(stat.responseSize), white("b"))
 	}
 
 	//extract assets from html
@@ -278,7 +278,7 @@ func fetchAsset(assetUrl string, client *http.Client, headers map[string]string,
 	//launch the query
 	req, _ := http.NewRequest("GET", assetUrl, nil)
 
-	if checkIfDomainAllowed(&req.URL.Host) == false {
+	if !checkIfDomainAllowed(&req.URL.Host) {
 		return
 	}
 
@@ -298,7 +298,7 @@ func fetchAsset(assetUrl string, client *http.Client, headers map[string]string,
 	}
 
 	//Set stat
-	stat.responseTime = time.Now().Sub(t0)
+	stat.responseTime = time.Since(t0)
 	stat.statusCode = resp.StatusCode
 
 	//get the body size
@@ -311,7 +311,7 @@ func fetchAsset(assetUrl string, client *http.Client, headers map[string]string,
 
 	//Print download
 	if *verbose {
-		fmt.Printf("%s\t%s %s %v %v%s\n", time.Now().Sub(globalStartTime), green(stat.statusCode), stat.url, cyan(stat.responseTime), white(stat.responseSize), white("b"))
+		fmt.Printf("%s\t%s %s %v %v%s\n", time.Since(globalStartTime), green(stat.statusCode), stat.url, cyan(stat.responseTime), white(stat.responseSize), white("b"))
 	}
 
 	chStat <- stat
@@ -468,7 +468,7 @@ func main() {
 	close(chUrls)
 
 	//Set timer for global time
-	gstat.totalResponseTime += time.Now().Sub(t0)
+	gstat.totalResponseTime += time.Since(t0)
 
 	// send data to influxdb
 	if *useInflux {
