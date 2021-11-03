@@ -17,21 +17,20 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"flag"
 	"fmt"
-	"github.com/fatih/color"
-	_ "github.com/influxdata/influxdb1-client" // this is important because of the bug in go mod
-	client "github.com/influxdata/influxdb1-client/v2"
-	"golang.org/x/net/html"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"regexp"
 	"strings"
 	"time"
-    "context"
-    "net"
+
+	"github.com/fatih/color"
+	"golang.org/x/net/html"
 )
 
 type downloadStatistic struct {
@@ -54,35 +53,35 @@ const (
 )
 
 var (
-	VERSION    = "0.3-dev"
+	VERSION = "0.3-dev"
 )
 
 //colors !
 var (
-	yellow = color.New(color.FgYellow).SprintFunc()
-	cyan   = color.New(color.FgCyan).SprintFunc()
-	white  = color.New(color.FgWhite).SprintFunc()
-	bold_white  = color.New(color.FgWhite, color.Bold).SprintFunc()
-	red    = color.New(color.FgRed, color.Bold).SprintFunc()
-	green  = color.New(color.FgGreen, color.Bold).SprintFunc()
+	yellow     = color.New(color.FgYellow).SprintFunc()
+	cyan       = color.New(color.FgCyan).SprintFunc()
+	white      = color.New(color.FgWhite).SprintFunc()
+	bold_white = color.New(color.FgWhite, color.Bold).SprintFunc()
+	red        = color.New(color.FgRed, color.Bold).SprintFunc()
+	green      = color.New(color.FgGreen, color.Bold).SprintFunc()
 )
 
 //cli flags
 var (
-	mainUrl        = flag.String("url", "", "The url to get.")
-	version        = flag.Bool("version", false, "Print version information.")
-	verbose        = flag.Bool("verbose", false, "Print more informations.")
-	debug        = flag.Bool("debug", false, "Print debug.")
-	parallelFetch  = flag.Int("parallel", 8, "Number of parallel fetch to launch. 0 means unlimited.")
-	connectTimeout = flag.Int("connect-timeout", 1000, "Connect timeout in ms.")
-    tlsHandshakeTimeout = flag.Int("tls-timeout", 1000, "TLS handshake timeout in ms.")
+	mainUrl             = flag.String("url", "", "The url to get.")
+	version             = flag.Bool("version", false, "Print version information.")
+	verbose             = flag.Bool("verbose", false, "Print more informations.")
+	debug               = flag.Bool("debug", false, "Print debug.")
+	parallelFetch       = flag.Int("parallel", 8, "Number of parallel fetch to launch. 0 means unlimited.")
+	connectTimeout      = flag.Int("connect-timeout", 1000, "Connect timeout in ms.")
+	tlsHandshakeTimeout = flag.Int("tls-timeout", 1000, "TLS handshake timeout in ms.")
 
-	resolve			= flag.String("resolve", "", "host:port:addr> Resolve the host+port to this address")
+	resolve            = flag.String("resolve", "", "host:port:addr> Resolve the host+port to this address")
 	useNagios          = flag.Bool("use-nagios", false, "Nagios compatible output.")
 	nagiosWarningTime  = flag.Int("nagios-warning", 5000, "Nagios warning time in ms.")
 	nagiosCriticalTime = flag.Int("nagios-critical", 10000, "Nagios critical time in ms.")
 
-	timeout        = flag.Int("timeout", 10000, "Global request timeout in ms.")
+	timeout               = flag.Int("timeout", 10000, "Global request timeout in ms.")
 	responseHeaderTimeout = flag.Int("response-header-timeout", 0, "Response header timeout in ms.")
 	useInflux             = flag.Bool("use-influx", false, "Send data to influxdb.")
 	influxUrl             = flag.String("influx-url", "http://localhost:8086", "The influx database access url.")
@@ -290,49 +289,6 @@ func fetchAsset(assetUrl string, client *http.Client, chStat chan downloadStatis
 	chStat <- stat
 }
 
-//Send statistic data to influxdb
-func sendstatsToInflux(assetsStats *[]downloadStatistic) {
-	// Make client
-	c, err := client.NewHTTPClient(client.HTTPConfig{Addr: *influxUrl})
-	if err != nil {
-		fmt.Println(red("Influxdb - error creating InfluxDB Client:\n"), err.Error())
-	}
-
-	// Create a new point batch
-	bp, _ := client.NewBatchPoints(client.BatchPointsConfig{
-		Database:  *influxDatabase,
-		Precision: "s",
-	})
-
-	//we want all the points of the batch to the same time
-	influxTime := time.Now()
-
-	//prepare data for influx
-	for _, stat := range *assetsStats {
-		// Create a point and add to batch
-		tags := map[string]string{"url": stat.url}
-		//var tags map[string]string
-		fields := map[string]interface{}{
-			"responseTime": int64(stat.responseTime),
-			"responseSize": stat.responseSize,
-		}
-		pt, err := client.NewPoint(*mainUrl, tags, fields, influxTime)
-		if err != nil {
-			fmt.Println(red("Influxdb - error:\n"), err.Error())
-		}
-		bp.AddPoint(pt)
-		//if (*verbose) {
-		//	fmt.Printf("influx: %v\n", pt)
-		//}
-	}
-
-	//Send data to influx
-	err = c.Write(bp)
-	if err != nil {
-		fmt.Println(red("Influxdb - error:\n"), err.Error())
-	}
-}
-
 // test if the given domain is allowed to fetch
 func checkIfDomainAllowed(host *string) bool {
 
@@ -382,46 +338,46 @@ func main() {
 	transport := &http.Transport{
 
 		DialContext: (&net.Dialer{
-			Timeout:   time.Duration(*connectTimeout) * time.Millisecond,
+			Timeout: time.Duration(*connectTimeout) * time.Millisecond,
 		}).DialContext,
 
-        TLSHandshakeTimeout:   time.Duration(*tlsHandshakeTimeout) * time.Millisecond,
-        ResponseHeaderTimeout: time.Duration(*responseHeaderTimeout) * time.Millisecond,
-    }
+		TLSHandshakeTimeout:   time.Duration(*tlsHandshakeTimeout) * time.Millisecond,
+		ResponseHeaderTimeout: time.Duration(*responseHeaderTimeout) * time.Millisecond,
+	}
 
-    dialer := &net.Dialer{
-        Timeout:   time.Duration(*connectTimeout) * time.Millisecond,
-//        KeepAlive: 30 * time.Second,
-    }
+	dialer := &net.Dialer{
+		Timeout: time.Duration(*connectTimeout) * time.Millisecond,
+		//        KeepAlive: 30 * time.Second,
+	}
 
 	var domain_resolve []string = nil
 
-	if (*resolve != "") {
+	if *resolve != "" {
 		domain_resolve = strings.Split(*resolve, ":")
-		if (len(domain_resolve) != 3) {
+		if len(domain_resolve) != 3 {
 			fmt.Printf("bad argument -resolve\n")
 			os.Exit(NAGIOS_UNKNOWN)
 		}
-				if *debug {
-					fmt.Printf("debug: domain_resolve set to %v\n", domain_resolve)
-				}
+		if *debug {
+			fmt.Printf("debug: domain_resolve set to %v\n", domain_resolve)
+		}
 	}
 
 	transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
-		if (*resolve != "") {
+		if *resolve != "" {
 			if addr == domain_resolve[0]+":"+domain_resolve[1] {
 				if *debug {
 					fmt.Printf(bold_white("debug: rewrite %s to %s\n"), addr, domain_resolve[2]+":"+domain_resolve[1])
 				}
-			    addr = domain_resolve[2]+":"+domain_resolve[1]
+				addr = domain_resolve[2] + ":" + domain_resolve[1]
 			}
 		}
-        return dialer.DialContext(ctx, network, addr)
-    }
+		return dialer.DialContext(ctx, network, addr)
+	}
 
 	//Set an http client with this transport
 	client := &http.Client{
-		Timeout: time.Duration(*timeout) * time.Millisecond,
+		Timeout:   time.Duration(*timeout) * time.Millisecond,
 		Transport: transport,
 	}
 
