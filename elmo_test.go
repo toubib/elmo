@@ -66,7 +66,7 @@ func TestFetchMainUrl(t *testing.T) {
 	client := &http.Client{Transport: transport}
 
 	for _, tt := range tests {
-		assets, mainUrlStat, err := fetchMainUrl(&ts.URL, client, make(map[string]string), nil)
+		assets, mainUrlStat, err := fetchMainUrl(ts.URL, client, make(map[string]string), "")
 
 		if err != nil {
 			t.Errorf("%v", err)
@@ -126,14 +126,14 @@ func TestFetchAsset(t *testing.T) {
 		u := ts.URL + tt.assetUrl
 
 		// fetch asset
-		go fetchAsset(u, client, make(map[string]string), chUrls, chFinished)
+		go fetchAsset(u, "", client, make(map[string]string), chUrls, chFinished)
 	}
 
 	// Subscribe to channels to wait for go routine
 	for c := 0; c < len(tests); {
 		select {
 		case stat := <-chUrls:
-			if *verbose {
+			if verbose {
 				fmt.Println("stat", stat)
 			}
 
@@ -171,12 +171,12 @@ func TestCheckIfDomainAllowed(t *testing.T) {
 	}
 
 	//force assets-allowed-domains flag
-	*assetsAllowedDomains = "test.com,test3.com"
+	assetsAllowedDomains := "test.com,test3.com"
 
 	for _, tt := range tests {
 		req, _ := http.NewRequest("GET", tt.url, nil)
 
-		testResult := (checkIfDomainAllowed(&req.URL.Host) == tt.result)
+		testResult := (checkIfDomainAllowed(assetsAllowedDomains, &req.URL.Host) == tt.result)
 		if !testResult {
 			t.Errorf("checkIfDomainAllowed (%v) has not returned %v but %v", tt.url, tt.result, testResult)
 		}

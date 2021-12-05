@@ -9,16 +9,16 @@ import (
 )
 
 //Send statistic data to influxdb
-func sendstatsToInflux(assetsStats *[]downloadStatistic) {
+func sendstatsToInflux(influxUrl string, influxDatabase string, mainUrl string, assetsStats *[]downloadStatistic) {
 	// Make client
-	c, err := client.NewHTTPClient(client.HTTPConfig{Addr: *influxUrl})
+	c, err := client.NewHTTPClient(client.HTTPConfig{Addr: influxUrl})
 	if err != nil {
 		fmt.Println(red("Influxdb - error creating InfluxDB Client:\n"), err.Error())
 	}
 
 	// Create a new point batch
 	bp, _ := client.NewBatchPoints(client.BatchPointsConfig{
-		Database:  *influxDatabase,
+		Database:  influxDatabase,
 		Precision: "s",
 	})
 
@@ -34,7 +34,7 @@ func sendstatsToInflux(assetsStats *[]downloadStatistic) {
 			"responseTime": int64(stat.responseTime),
 			"responseSize": stat.responseSize,
 		}
-		pt, err := client.NewPoint(*mainUrl, tags, fields, influxTime)
+		pt, err := client.NewPoint(mainUrl, tags, fields, influxTime)
 		if err != nil {
 			fmt.Println(red("Influxdb - error:\n"), err.Error())
 		}
