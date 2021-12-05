@@ -171,6 +171,11 @@ func cliFlags() []cli.Flag {
 			Name:  "assets-allowed-domains",
 			Usage: "List of allowed assets domains to fetch from, comma separated",
 		},
+		&cli.StringSliceFlag{
+			Name:    "header",
+			Aliases: []string{"H"},
+			Usage:   "Http header to add. Can be use multiple times",
+		},
 	}
 }
 
@@ -461,6 +466,18 @@ func main() {
 
 		//Set headers
 		headers := make(map[string]string)
+		for i := range cli.StringSlice("header") {
+			h := strings.SplitN(cli.StringSlice("header")[i], ":", 2)
+
+			if len(h) > 1 {
+				headers[h[0]] = h[1]
+			} else {
+				headers[h[0]] = ""
+			}
+
+		}
+
+		//Specific user-agent headers
 		if cli.String("user-agent") != "" {
 			headers["User-Agent"] = cli.String("user-agent")
 		}
