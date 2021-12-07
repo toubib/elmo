@@ -55,7 +55,7 @@ const (
 )
 
 var (
-	VERSION = "0.3-dev"
+	VERSION = "0.3"
 )
 
 //colors !
