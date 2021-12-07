@@ -9,35 +9,40 @@ It can send download time statistics to [InfluxDB](https://www.influxdata.com/pr
 ## Usage
 
 ```
-Usage of ./elmo:
-  -assets-allowed-domains string
-    	List of allowed assets domains to fetch from, comma separated.
-  -connect-timeout int
-    	Connect timeout in ms. (default 1000)
-  -influx-database string
-    	The influx database name. (default "elmo")
-  -influx-url string
-    	The influx database access url. (default "http://localhost:8086")
-  -nagios-critical int
-    	Nagios critical time in ms. (default 10000)
-  -nagios-warning int
-    	Nagios warning time in ms. (default 5000)
-  -parallel int
-    	Number of parallel fetch to launch. 0 means unlimited. (default 8)
-  -request-timeout int
-    	Request timeout in ms. (default 10000)
-  -response-header-timeout int
-    	Response header timeout in ms.
-  -url string
-    	The url to get.
-  -use-influx
-    	Send data to influxdb.
-  -use-nagios
-    	Nagios compatible output.
-  -verbose
-    	Print more informations.
-  -version
-    	Print version information.
+NAME:
+   elmo - Elmo web client
+
+USAGE:
+   elmo [global options] command [command options] [arguments...]
+
+VERSION:
+   0.3
+
+COMMANDS:
+   help, h  Shows a list of commands or help for one command
+
+GLOBAL OPTIONS:
+   --url value, -u value            The url to get
+   --user-agent value, -A value     Change the user-agent
+   --keyword value, -K value        Check for keyword in reponse
+   --debug                          (default: false)
+   --verbose                        (default: false)
+   --parallel value, -p value       Number of parallel fetch to launch. 0 means unlimited (default: 8)
+   --connect-timeout value          Connect timeout in ms (default: 1000)
+   --tls-timeout value              TLS handshake timeout in ms (default: 1000)
+   --resolve value                  <host:port:addr> Resolve the host+port to this address
+   --use-nagios                     Nagios compatible output. (default: false)
+   --nagios-warning value           Nagios warning time in ms (default: 5000)
+   --nagios-critical value          Nagios critical time in ms (default: 10000)
+   --timeout value, -t value        Global request timeout in ms. (default: 10000)
+   --response-header-timeout value  Response header timeout in ms (default: 0)
+   --use-influx                     Send data to influxdb (default: false)
+   --influx-url value               The influx database access url (default: "http://localhost:8086")
+   --influx-database value          The influx database name (default: "elmo")
+   --assets-allowed-domains value   List of allowed assets domains to fetch from, comma separated
+   --header value, -H value         Http header to add. Can be use multiple times
+   --help, -h                       show help (default: false)
+   --version, -v                    print the version (default: false)
 ```
 
 ## Examples
