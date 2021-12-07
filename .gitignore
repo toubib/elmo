@@ -29,3 +29,4 @@ elmo
 .*.swp
 
 build
+*.sha256.txt
