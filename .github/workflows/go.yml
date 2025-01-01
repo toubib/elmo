@@ -45,7 +45,7 @@ jobs:
         ls -lh ${{ env.GOPATH }}/src/elmo
       
     - name: Archive production artifacts
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: elmo
         path: ${{ env.GOPATH }}/src/elmo/elmo
