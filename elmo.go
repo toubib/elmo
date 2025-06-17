@@ -24,11 +24,13 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"net/http/httptrace"
 	"net/url"
 	"os"
 	"regexp"
 	"strings"
 	"time"
+	"crypto/tls"
 
 	"github.com/fatih/color"
 	"github.com/urfave/cli/v2"
@@ -36,10 +38,15 @@ import (
 )
 
 type downloadStatistic struct {
-	url          string
-	responseTime time.Duration
-	responseSize int
-	statusCode   int
+	url          			string
+	responseTime 			time.Duration
+	timeNameLookup			time.Duration
+	timeConnect				time.Duration
+	timeTls					time.Duration
+	timeFinishConnect		time.Duration
+	timeResponseFirstByte	time.Duration
+	responseSize			int
+	statusCode   			int
 }
 
 type globalStatistic struct {
@@ -234,17 +241,61 @@ func getLink(t *html.Token) (ok bool, link string) {
 // Extract all http** links from a given webpage
 func fetchMainUrl(mainUrl string, client *http.Client, headers map[string]string, keyword string) ([]string, downloadStatistic, error) {
 
-	//List of urls found
-	var assets []string
+	var (
+		//List of urls found
+		assets []string
+
+		dnsStart, dnsDone  time.Time
+		connStart, connDone time.Time
+		tlsStart, tlsDone  time.Time
+		gotConn            time.Time
+		firstByte          time.Time
+	)
 
 	//set downloadStatistic
-	stat := downloadStatistic{mainUrl, 0, 0, 0}
-
-	//timer before
-	t0 := time.Now()
+	stat := downloadStatistic{mainUrl, 0, 0, 0, 0, 0, 0, 0, 0}
 
 	//launch the query
 	req, _ := http.NewRequest("GET", mainUrl, nil)
+
+	trace := &httptrace.ClientTrace{
+		// DNSStart is called when a DNS lookup begins.
+		DNSStart: func(info httptrace.DNSStartInfo) {
+			dnsStart = time.Now()
+		},
+		// DNSDone is called when a DNS lookup ends.
+		DNSDone: func(info httptrace.DNSDoneInfo) {
+			dnsDone = time.Now()
+		},
+		// ConnectStart is called when a new connection's Dial begins.
+		ConnectStart: func(network, addr string) {
+			connStart = time.Now()
+		},
+		// ConnectDone is called when a new connection's Dial completes.
+		ConnectDone: func(network, addr string, err error) {
+			connDone = time.Now()
+		},
+		// TLSHandshakeStart is called when the TLS handshake is started.
+		TLSHandshakeStart: func() {
+			tlsStart = time.Now()
+		},
+		// TLSHandshakeDone is called after the TLS handshake with either the
+		// successful handshake's connection state, or a non-nil error on handshake
+		// failure.
+		TLSHandshakeDone: func(state tls.ConnectionState, err error) {
+			tlsDone = time.Now()
+		},
+		// GotConn is called after a successful connection is obtained.
+		GotConn: func(info httptrace.GotConnInfo) {
+			gotConn = time.Now()
+		},
+		// GotFirstResponseByte is called when the first byte of the response headers is available.
+		GotFirstResponseByte: func() {
+			firstByte = time.Now()
+		},
+	}
+
+	req = req.WithContext(httptrace.WithClientTrace(context.Background(), trace))
 
 	//set headers
 	for k, v := range headers {
@@ -262,7 +313,7 @@ func fetchMainUrl(mainUrl string, client *http.Client, headers map[string]string
 			return nil
 		}
 	}
-
+	var timeStart = time.Now()
 	resp, err := client.Do(req)
 
 	if debug {
@@ -274,8 +325,26 @@ func fetchMainUrl(mainUrl string, client *http.Client, headers map[string]string
 	}
 
 	//Set stats
-	stat.responseTime = time.Since(t0)
+	timeEnd := time.Now()
 	stat.statusCode = resp.StatusCode
+
+	stat.responseTime 			= timeEnd.Sub(timeStart)
+	stat.timeNameLookup 		= dnsDone.Sub(dnsStart)
+	stat.timeConnect			= connDone.Sub(connStart)
+	stat.timeTls				= tlsDone.Sub(tlsStart)
+	stat.timeFinishConnect		= gotConn.Sub(timeStart)
+	stat.timeResponseFirstByte	= firstByte.Sub(gotConn)
+
+	if debug {
+		fmt.Printf("%s\n", mainUrl)
+		fmt.Printf("time_namelookup:  	%.3f ms\n", float64(stat.timeNameLookup.Microseconds())/1000)
+		fmt.Printf("time_connect:     	%.3f ms\n", float64(stat.timeConnect.Microseconds())/1000)
+		fmt.Printf("time_tls:			%.3f ms\n", float64(stat.timeTls.Microseconds())/1000)
+		fmt.Printf("time_finishconnect:	%.3f ms\n", float64(stat.timeFinishConnect.Microseconds())/1000)
+		fmt.Printf("time_responsefirstbyte: %.3f ms\n", float64(stat.timeResponseFirstByte.Microseconds())/1000)
+		fmt.Printf("time_total:  		%.3f ms\n", float64(stat.responseTime.Microseconds())/1000)
+		fmt.Printf("\n")
+	}
 
 	//get the body size
 	body, err := ioutil.ReadAll(resp.Body)
@@ -363,11 +432,19 @@ func fetchAsset(assetUrl string, assetsAllowedDomains string, client *http.Clien
 		chFinished <- true
 	}()
 
+	var (
+		dnsStart, dnsDone  time.Time
+		connStart, connDone time.Time
+		tlsStart, tlsDone  time.Time
+		gotConn            time.Time
+		firstByte          time.Time
+	)
+
 	//set downloadStatistic
-	stat := downloadStatistic{assetUrl, 0, 0, 0}
+	stat := downloadStatistic{assetUrl, 0, 0, 0, 0, 0, 0, 0, 0}
 
 	//timer before
-	t0 := time.Now()
+	var timeStart = time.Now()
 
 	//launch the query
 	req, _ := http.NewRequest("GET", assetUrl, nil)
@@ -375,6 +452,45 @@ func fetchAsset(assetUrl string, assetsAllowedDomains string, client *http.Clien
 	if !checkIfDomainAllowed(assetsAllowedDomains, &req.URL.Host) {
 		return
 	}
+
+	trace := &httptrace.ClientTrace{
+		// DNSStart is called when a DNS lookup begins.
+		DNSStart: func(info httptrace.DNSStartInfo) {
+			dnsStart = time.Now()
+		},
+		// DNSDone is called when a DNS lookup ends.
+		DNSDone: func(info httptrace.DNSDoneInfo) {
+			dnsDone = time.Now()
+		},
+		// ConnectStart is called when a new connection's Dial begins.
+		ConnectStart: func(network, addr string) {
+			connStart = time.Now()
+		},
+		// ConnectDone is called when a new connection's Dial completes.
+		ConnectDone: func(network, addr string, err error) {
+			connDone = time.Now()
+		},
+		// TLSHandshakeStart is called when the TLS handshake is started.
+		TLSHandshakeStart: func() {
+			tlsStart = time.Now()
+		},
+		// TLSHandshakeDone is called after the TLS handshake with either the
+		// successful handshake's connection state, or a non-nil error on handshake
+		// failure.
+		TLSHandshakeDone: func(state tls.ConnectionState, err error) {
+			tlsDone = time.Now()
+		},
+		// GotConn is called after a successful connection is obtained.
+		GotConn: func(info httptrace.GotConnInfo) {
+			gotConn = time.Now()
+		},
+		// GotFirstResponseByte is called when the first byte of the response headers is available.
+		GotFirstResponseByte: func() {
+			firstByte = time.Now()
+		},
+	}
+
+	req = req.WithContext(httptrace.WithClientTrace(context.Background(), trace))
 
 	//set headers
 	for k, v := range headers {
@@ -392,8 +508,27 @@ func fetchAsset(assetUrl string, assetsAllowedDomains string, client *http.Clien
 	}
 
 	//Set stat
-	stat.responseTime = time.Since(t0)
+	timeEnd := time.Now()
+	//stat.responseTime = timeEnd.Sub(timeStart)
 	stat.statusCode = resp.StatusCode
+
+	stat.responseTime 			= timeEnd.Sub(timeStart)
+	stat.timeNameLookup 		= dnsDone.Sub(dnsStart)
+	stat.timeConnect			= connDone.Sub(connStart)
+	stat.timeTls				= tlsDone.Sub(tlsStart)
+	stat.timeFinishConnect		= gotConn.Sub(timeStart)
+	stat.timeResponseFirstByte	= firstByte.Sub(gotConn)
+
+	if debug {
+		fmt.Printf("%s\n", assetUrl)
+		fmt.Printf("time_namelookup:  	%.3f ms\n", float64(stat.timeNameLookup.Microseconds())/1000)
+		fmt.Printf("time_connect:     	%.3f ms\n", float64(stat.timeConnect.Microseconds())/1000)
+		fmt.Printf("time_tls:			%.3f ms\n", float64(stat.timeTls.Microseconds())/1000)
+		fmt.Printf("time_finishconnect:	%.3f ms\n", float64(stat.timeFinishConnect.Microseconds())/1000)
+		fmt.Printf("time_responsefirstbyte: %.3f ms\n", float64(stat.timeResponseFirstByte.Microseconds())/1000)
+		fmt.Printf("time_total:  		%.3f ms\n", float64(stat.responseTime.Microseconds())/1000)
+		fmt.Printf("\n")
+	}
 
 	//get the body size
 	b := resp.Body

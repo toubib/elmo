@@ -33,6 +33,11 @@ func sendstatsToInflux(influxUrl string, influxDatabase string, mainUrl string, 
 		fields := map[string]interface{}{
 			"responseTime": int64(stat.responseTime),
 			"responseSize": stat.responseSize,
+			"timeNameLookup": int64(stat.timeNameLookup),
+			"timeConnect": int64(stat.timeConnect),
+			"timeTls": int64(stat.timeTls),
+			"timeFinishConnect": int64(stat.timeFinishConnect),
+			"timeResponseFirstByte": int64(stat.timeResponseFirstByte),
 		}
 		pt, err := client.NewPoint(mainUrl, tags, fields, influxTime)
 		if err != nil {
