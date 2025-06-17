@@ -755,7 +755,7 @@ func main() {
 			}
 
 		} else if cli.String("output") == "log" {
-			fmt.Printf("%v %d/%d %v %v", time.Now().Format("2006-01-02 15:04:05.000"), len(assetsStats), len(assets), gstat.totalResponseTime, gstat.totalResponseSize)
+			fmt.Printf("%v %s %d/%d %v %v", time.Now().Format("2006-01-02 15:04:05.000"), cli.String("url"), len(assetsStats), len(assets), gstat.totalResponseTime, gstat.totalResponseSize)
 
 		} else {
 			fmt.Printf("Downloaded assets: %d/%d.\n", len(assetsStats), len(assets))
