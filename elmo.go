@@ -80,6 +80,7 @@ var (
 	debug     = false
 	verbose   = false
 	useNagios bool
+	output    string
 	timeout   int
 )
 
@@ -90,6 +91,14 @@ func cliFlags() []cli.Flag {
 			Usage:    "The url to get",
 			Aliases:  []string{"u"},
 			Required: true,
+		},
+		&cli.StringFlag{
+			Name:     "output",
+			Usage:    "Output format",
+			Aliases:  []string{"o"},
+			Required: false,
+			Value:       "default",
+			Destination: &output,
 		},
 		&cli.StringFlag{
 			Name:    "user-agent",
@@ -339,7 +348,7 @@ func fetchMainUrl(mainUrl string, client *http.Client, headers map[string]string
 		fmt.Printf("%s\n", mainUrl)
 		fmt.Printf("time_namelookup:  	%.3f ms\n", float64(stat.timeNameLookup.Microseconds())/1000)
 		fmt.Printf("time_connect:     	%.3f ms\n", float64(stat.timeConnect.Microseconds())/1000)
-		fmt.Printf("time_tls:			%.3f ms\n", float64(stat.timeTls.Microseconds())/1000)
+		fmt.Printf("time_tls:               %.3f ms\n", float64(stat.timeTls.Microseconds())/1000)
 		fmt.Printf("time_finishconnect:	%.3f ms\n", float64(stat.timeFinishConnect.Microseconds())/1000)
 		fmt.Printf("time_responsefirstbyte: %.3f ms\n", float64(stat.timeResponseFirstByte.Microseconds())/1000)
 		fmt.Printf("time_total:  		%.3f ms\n", float64(stat.responseTime.Microseconds())/1000)
@@ -523,7 +532,7 @@ func fetchAsset(assetUrl string, assetsAllowedDomains string, client *http.Clien
 		fmt.Printf("%s\n", assetUrl)
 		fmt.Printf("time_namelookup:  	%.3f ms\n", float64(stat.timeNameLookup.Microseconds())/1000)
 		fmt.Printf("time_connect:     	%.3f ms\n", float64(stat.timeConnect.Microseconds())/1000)
-		fmt.Printf("time_tls:			%.3f ms\n", float64(stat.timeTls.Microseconds())/1000)
+		fmt.Printf("time_tls:               %.3f ms\n", float64(stat.timeTls.Microseconds())/1000)
 		fmt.Printf("time_finishconnect:	%.3f ms\n", float64(stat.timeFinishConnect.Microseconds())/1000)
 		fmt.Printf("time_responsefirstbyte: %.3f ms\n", float64(stat.timeResponseFirstByte.Microseconds())/1000)
 		fmt.Printf("time_total:  		%.3f ms\n", float64(stat.responseTime.Microseconds())/1000)
@@ -744,6 +753,9 @@ func main() {
 			} else {
 				os.Exit(NAGIOS_OK)
 			}
+
+		} else if cli.String("output") == "log" {
+			fmt.Printf("%v %d/%d %v %v", time.Now().Format("2006-01-02 15:04:05.000"), len(assetsStats), len(assets), gstat.totalResponseTime, gstat.totalResponseSize)
 
 		} else {
 			fmt.Printf("Downloaded assets: %d/%d.\n", len(assetsStats), len(assets))
