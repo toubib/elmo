@@ -472,7 +472,16 @@ func fetchAsset(assetUrl string, assetsAllowedDomains string, client *http.Clien
 	var timeStart = time.Now()
 
 	//launch the query
-	req, _ := http.NewRequest("GET", assetUrl, nil)
+	req, err := http.NewRequest("GET", assetUrl, nil)
+
+	//handle error
+	if err != nil {
+		// TODO send error to influx
+		if !useNagios {
+			fmt.Println(time.Now().Format("2006-01-02 15:04:05.000"),red("Error:"), err, stat)
+		}
+		return
+	}
 
 	if !checkIfDomainAllowed(assetsAllowedDomains, &req.URL.Host) {
 		return
@@ -527,8 +536,9 @@ func fetchAsset(assetUrl string, assetsAllowedDomains string, client *http.Clien
 
 	//handle error
 	if err != nil {
+		// TODO send error to influx
 		if !useNagios {
-			fmt.Println(red("Error:"), stat.url, err)
+			fmt.Println(time.Now().Format("2006-01-02 15:04:05.000"),red("Error:"), err, stat)
 		}
 		return
 	}
@@ -581,8 +591,9 @@ func fetchAsset(assetUrl string, assetsAllowedDomains string, client *http.Clien
 	defer b.Close() // close Body when the function returns
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
+		// TODO send error to influx
 		if !useNagios {
-			fmt.Println(red("Error:"), stat.url, err)
+			fmt.Println(time.Now().Format("2006-01-02 15:04:05.000"),red("Error:"), err, stat)
 		}
 		stat.responseSize = 0
 	} else {
@@ -720,11 +731,14 @@ func main() {
 
 		//handle main url error
 		if err != nil {
+			//
+			// TODO send error to influx
+			//
 			if cli.Bool("use-nagios") {
 				fmt.Println(err)
 				os.Exit(NAGIOS_ERROR)
 			} else {
-				fmt.Println(red("Fatal:"), err)
+				fmt.Println(time.Now().Format("2006-01-02 15:04:05.000"),red("Fatal:"), err, mainUrlStat)
 				os.Exit(1)
 			}
 		}
