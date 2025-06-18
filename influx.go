@@ -33,6 +33,8 @@ func sendstatsToInflux(influxUrl string, influxDatabase string, mainUrl string, 
 		fields := map[string]interface{}{
 			"responseTime": int64(stat.responseTime),
 			"responseSize": stat.responseSize,
+			"statusCode": stat.statusCode,
+			"requestFailure": stat.requestFailure,
 			"timeNameLookup": int64(stat.timeNameLookup),
 			"timeConnect": int64(stat.timeConnect),
 			"timeTls": int64(stat.timeTls),

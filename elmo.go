@@ -40,6 +40,7 @@ import (
 type downloadStatistic struct {
 	url          			string
 	responseTime 			time.Duration
+	requestFailure			int
 	timeNameLookup			time.Duration
 	timeConnect				time.Duration
 	timeTls					time.Duration
@@ -264,7 +265,7 @@ func fetchMainUrl(mainUrl string, client *http.Client, headers map[string]string
 	)
 
 	//set downloadStatistic
-	stat := downloadStatistic{mainUrl, 0, 0, 0, 0, 0, 0, 0, 0, false}
+	stat := downloadStatistic{mainUrl, 0, 0, 0, 0, 0, 0, 0, 0, 0, false}
 
 	//launch the query
 	req, _ := http.NewRequest("GET", mainUrl, nil)
@@ -333,6 +334,7 @@ func fetchMainUrl(mainUrl string, client *http.Client, headers map[string]string
 	}
 
 	if err != nil {
+		stat.requestFailure = 1
 		return assets, stat, err
 	}
 
@@ -466,7 +468,7 @@ func fetchAsset(assetUrl string, assetsAllowedDomains string, client *http.Clien
 	)
 
 	//set downloadStatistic
-	stat := downloadStatistic{assetUrl, 0, 0, 0, 0, 0, 0, 0, 0, false}
+	stat := downloadStatistic{assetUrl, 0, 0, 0, 0, 0, 0, 0, 0, 0, false}
 
 	//timer before
 	var timeStart = time.Now()
@@ -537,6 +539,7 @@ func fetchAsset(assetUrl string, assetsAllowedDomains string, client *http.Clien
 	//handle error
 	if err != nil {
 		// TODO send error to influx
+		stat.requestFailure = 1
 		if !useNagios {
 			fmt.Println(time.Now().Format("2006-01-02 15:04:05.000"),red("Error:"), err, stat)
 		}
@@ -731,9 +734,14 @@ func main() {
 
 		//handle main url error
 		if err != nil {
-			//
-			// TODO send error to influx
-			//
+			mainUrlStat.requestFailure = 1
+
+			// send data to influxdb even if error
+			if cli.Bool("use-influx") {
+				sendstatsToInflux(cli.String("influx-url"), cli.String("influx-database"),
+					cli.String("url"), &assetsStats)
+			}
+
 			if cli.Bool("use-nagios") {
 				fmt.Println(err)
 				os.Exit(NAGIOS_ERROR)
