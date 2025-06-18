@@ -38,6 +38,7 @@ func sendstatsToInflux(influxUrl string, influxDatabase string, mainUrl string, 
 			"timeTls": int64(stat.timeTls),
 			"timeFinishConnect": int64(stat.timeFinishConnect),
 			"timeResponseFirstByte": int64(stat.timeResponseFirstByte),
+			"connReused": func() int64 { if stat.connReused { return 1 } else { return 0 } }(),
 		}
 		pt, err := client.NewPoint(mainUrl, tags, fields, influxTime)
 		if err != nil {

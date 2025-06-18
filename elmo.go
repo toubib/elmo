@@ -47,6 +47,7 @@ type downloadStatistic struct {
 	timeResponseFirstByte	time.Duration
 	responseSize			int
 	statusCode   			int
+	connReused              bool
 }
 
 type globalStatistic struct {
@@ -259,10 +260,11 @@ func fetchMainUrl(mainUrl string, client *http.Client, headers map[string]string
 		tlsStart, tlsDone  time.Time
 		gotConn            time.Time
 		firstByte          time.Time
+		connReused         bool
 	)
 
 	//set downloadStatistic
-	stat := downloadStatistic{mainUrl, 0, 0, 0, 0, 0, 0, 0, 0}
+	stat := downloadStatistic{mainUrl, 0, 0, 0, 0, 0, 0, 0, 0, false}
 
 	//launch the query
 	req, _ := http.NewRequest("GET", mainUrl, nil)
@@ -297,6 +299,7 @@ func fetchMainUrl(mainUrl string, client *http.Client, headers map[string]string
 		// GotConn is called after a successful connection is obtained.
 		GotConn: func(info httptrace.GotConnInfo) {
 			gotConn = time.Now()
+			connReused = info.Reused
 		},
 		// GotFirstResponseByte is called when the first byte of the response headers is available.
 		GotFirstResponseByte: func() {
@@ -343,16 +346,28 @@ func fetchMainUrl(mainUrl string, client *http.Client, headers map[string]string
 	stat.timeTls				= tlsDone.Sub(tlsStart)
 	stat.timeFinishConnect		= gotConn.Sub(timeStart)
 	stat.timeResponseFirstByte	= firstByte.Sub(gotConn)
+	stat.connReused				= connReused
 
 	if debug {
-		fmt.Printf("%s\n", mainUrl)
-		fmt.Printf("time_namelookup:  	%.3f ms\n", float64(stat.timeNameLookup.Microseconds())/1000)
-		fmt.Printf("time_connect:     	%.3f ms\n", float64(stat.timeConnect.Microseconds())/1000)
-		fmt.Printf("time_tls:               %.3f ms\n", float64(stat.timeTls.Microseconds())/1000)
-		fmt.Printf("time_finishconnect:	%.3f ms\n", float64(stat.timeFinishConnect.Microseconds())/1000)
-		fmt.Printf("time_responsefirstbyte: %.3f ms\n", float64(stat.timeResponseFirstByte.Microseconds())/1000)
-		fmt.Printf("time_total:  		%.3f ms\n", float64(stat.responseTime.Microseconds())/1000)
-		fmt.Printf("\n")
+		fmt.Printf("timeNameLookup timeConnect timeTls timeFinishConnect timeResponseFirstByte responseTime url (unit: ms)\n",)
+		if(connReused) {
+			fmt.Printf("-    -    -    %.1f %.1f %.1f %s\n",
+				float64(stat.timeFinishConnect.Microseconds())/1000,
+				float64(stat.timeResponseFirstByte.Microseconds())/1000,
+				float64(stat.responseTime.Microseconds())/1000,
+				mainUrl,
+			)
+		} else {
+			fmt.Printf("%.1f %.1f %.1f %.1f %.1f %.1f %s\n",
+				float64(stat.timeNameLookup.Microseconds())/1000,
+				float64(stat.timeConnect.Microseconds())/1000,
+				float64(stat.timeTls.Microseconds())/1000,
+				float64(stat.timeFinishConnect.Microseconds())/1000,
+				float64(stat.timeResponseFirstByte.Microseconds())/1000,
+				float64(stat.responseTime.Microseconds())/1000,
+				mainUrl,
+			)
+		}
 	}
 
 	//get the body size
@@ -447,10 +462,11 @@ func fetchAsset(assetUrl string, assetsAllowedDomains string, client *http.Clien
 		tlsStart, tlsDone  time.Time
 		gotConn            time.Time
 		firstByte          time.Time
+		connReused         bool
 	)
 
 	//set downloadStatistic
-	stat := downloadStatistic{assetUrl, 0, 0, 0, 0, 0, 0, 0, 0}
+	stat := downloadStatistic{assetUrl, 0, 0, 0, 0, 0, 0, 0, 0, false}
 
 	//timer before
 	var timeStart = time.Now()
@@ -492,6 +508,7 @@ func fetchAsset(assetUrl string, assetsAllowedDomains string, client *http.Clien
 		// GotConn is called after a successful connection is obtained.
 		GotConn: func(info httptrace.GotConnInfo) {
 			gotConn = time.Now()
+			connReused = info.Reused
 		},
 		// GotFirstResponseByte is called when the first byte of the response headers is available.
 		GotFirstResponseByte: func() {
@@ -522,22 +539,42 @@ func fetchAsset(assetUrl string, assetsAllowedDomains string, client *http.Clien
 	stat.statusCode = resp.StatusCode
 
 	stat.responseTime 			= timeEnd.Sub(timeStart)
-	stat.timeNameLookup 		= dnsDone.Sub(dnsStart)
-	stat.timeConnect			= connDone.Sub(connStart)
-	stat.timeTls				= tlsDone.Sub(tlsStart)
 	stat.timeFinishConnect		= gotConn.Sub(timeStart)
 	stat.timeResponseFirstByte	= firstByte.Sub(gotConn)
+	stat.connReused				= connReused
+
+	if(connReused) {
+		stat.timeTls				= 0
+		stat.timeNameLookup 		= 0
+		stat.timeConnect			= 0
+	} else {
+		stat.timeTls				= tlsDone.Sub(tlsStart)
+		stat.timeNameLookup 		= dnsDone.Sub(dnsStart)
+		stat.timeConnect			= connDone.Sub(connStart)
+	}
 
 	if debug {
-		fmt.Printf("%s\n", assetUrl)
-		fmt.Printf("time_namelookup:  	%.3f ms\n", float64(stat.timeNameLookup.Microseconds())/1000)
-		fmt.Printf("time_connect:     	%.3f ms\n", float64(stat.timeConnect.Microseconds())/1000)
-		fmt.Printf("time_tls:               %.3f ms\n", float64(stat.timeTls.Microseconds())/1000)
-		fmt.Printf("time_finishconnect:	%.3f ms\n", float64(stat.timeFinishConnect.Microseconds())/1000)
-		fmt.Printf("time_responsefirstbyte: %.3f ms\n", float64(stat.timeResponseFirstByte.Microseconds())/1000)
-		fmt.Printf("time_total:  		%.3f ms\n", float64(stat.responseTime.Microseconds())/1000)
-		fmt.Printf("\n")
+		if(connReused) {
+			fmt.Printf("-    -    -    %.1f %.1f %.1f %s\n",
+				float64(stat.timeFinishConnect.Microseconds())/1000,
+				float64(stat.timeResponseFirstByte.Microseconds())/1000,
+				float64(stat.responseTime.Microseconds())/1000,
+				assetUrl,
+			)
+		} else {
+			fmt.Printf("%.1f %.1f %.1f %.1f %.1f %.1f %s\n",
+				float64(stat.timeNameLookup.Microseconds())/1000,
+				float64(stat.timeConnect.Microseconds())/1000,
+				float64(stat.timeTls.Microseconds())/1000,
+				float64(stat.timeFinishConnect.Microseconds())/1000,
+				float64(stat.timeResponseFirstByte.Microseconds())/1000,
+				float64(stat.responseTime.Microseconds())/1000,
+				assetUrl,
+			)
+		}
 	}
+
+	//fmt.Printf("Stats: %s: %v\n",assetUrl, stat)
 
 	//get the body size
 	b := resp.Body
